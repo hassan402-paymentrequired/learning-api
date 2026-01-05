@@ -1,0 +1,70 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class ExamAttempt extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'user_id',
+        'exam_id',
+        'started_at',
+        'completed_at',
+        'time_spent',
+        'score',
+        'total_questions',
+        'correct_answers',
+        'status',
+    ];
+
+    protected $casts = [
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'time_spent' => 'integer',
+        'score' => 'integer',
+        'total_questions' => 'integer',
+        'correct_answers' => 'integer',
+    ];
+
+    /**
+     * Get the user that owns the exam attempt.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the exam for the attempt.
+     */
+    public function exam(): BelongsTo
+    {
+        return $this->belongsTo(Exam::class);
+    }
+
+    /**
+     * Get the user answers for the attempt.
+     */
+    public function userAnswers(): HasMany
+    {
+        return $this->hasMany(UserAnswer::class);
+    }
+
+    /**
+     * Calculate the percentage score.
+     */
+    public function getPercentageAttribute(): float
+    {
+        if ($this->total_questions === 0) {
+            return 0;
+        }
+
+        return round(($this->correct_answers / $this->total_questions) * 100, 2);
+    }
+}
