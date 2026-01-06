@@ -60,14 +60,14 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
 
     const handleDelete = (questionId: number) => {
         if (confirm('Are you sure you want to delete this question?')) {
-            router.delete(admin.exams.questions.destroy(exam.id, questionId).url);
+            router.delete(admin.exams.questions.destroy(exam?.id, questionId).url);
         }
     };
 
     const handleBulkUpload = (e: React.FormEvent) => {
         e.preventDefault();
         setUploadErrors([]);
-        
+
         if (!data.file) {
             setUploadErrors(['Please select a file to upload.']);
             return;
@@ -245,7 +245,7 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                     <p>No questions yet. Add your first question to get started.</p>
                                 </div>
                             ) : (
-                                exam.questions.map((question, index) => (
+                                exam.questions.map((question) => (
                                     <Card key={question.id}>
                                         <CardHeader>
                                             <div className="flex items-start justify-between">
