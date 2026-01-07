@@ -40,13 +40,32 @@ class ExamAttemptController extends Controller
             ]);
         }
 
-        $attempt = ExamAttempt::create([
+        // Get subjects and duration from request if provided (for multi-subject exams)
+        $subjects = $request->input('subjects');
+        $durationMinutes = $request->input('duration_minutes');
+        
+        // Calculate total questions from subjects if provided
+        $totalQuestions = $exam->questions()->count();
+        if ($subjects && is_array($subjects)) {
+            $totalQuestions = array_sum(array_column($subjects, 'question_count'));
+        }
+
+        $attemptData = [
             'user_id' => auth()->id(),
             'exam_id' => $exam->id,
             'started_at' => now(),
             'status' => 'in_progress',
-            'total_questions' => $exam->questions()->count(),
-        ]);
+            'total_questions' => $totalQuestions,
+        ];
+
+        if ($subjects !== null) {
+            $attemptData['subjects'] = $subjects;
+        }
+        if ($durationMinutes !== null) {
+            $attemptData['duration_minutes'] = $durationMinutes;
+        }
+
+        $attempt = ExamAttempt::create($attemptData);
 
         return response()->json([
             'success' => true,
@@ -141,13 +160,27 @@ class ExamAttemptController extends Controller
         $totalTimeSpent = UserAnswer::where('exam_attempt_id', $attempt->id)
             ->sum('time_spent');
 
-        $attempt->update([
+        // Get subjects and duration from request if provided (for multi-subject exams)
+        $subjects = $request->input('subjects', $attempt->subjects);
+        $durationMinutes = $request->input('duration_minutes', $attempt->duration_minutes);
+
+        $updateData = [
             'completed_at' => now(),
             'time_spent' => $totalTimeSpent,
             'correct_answers' => $correctAnswers,
             'score' => $correctAnswers,
             'status' => 'completed',
-        ]);
+        ];
+
+        // Only update subjects and duration if provided
+        if ($subjects !== null) {
+            $updateData['subjects'] = $subjects;
+        }
+        if ($durationMinutes !== null) {
+            $updateData['duration_minutes'] = $durationMinutes;
+        }
+
+        $attempt->update($updateData);
 
         return response()->json([
             'success' => true,
@@ -240,7 +273,7 @@ class ExamAttemptController extends Controller
         }
 
         $results = $attempt->userAnswers()
-            ->with(['question.answers', 'answer'])
+            ->with(['question.answers', 'answer', 'question.exam'])
             ->get()
             ->map(function ($userAnswer) {
                 $question = $userAnswer->question;
@@ -268,6 +301,40 @@ class ExamAttemptController extends Controller
                 ];
             });
 
+        // Calculate subject-based analytics if multiple subjects
+        $subjectAnalytics = [];
+        if ($attempt->subjects && is_array($attempt->subjects) && count($attempt->subjects) > 0) {
+            // Group results by subject based on exam subject
+            $resultsBySubject = [];
+            foreach ($results as $result) {
+                // Get the exam for this question to find its subject
+                $question = \App\Models\Question::with('exam')->find($result['question']['id']);
+                if ($question && $question->exam) {
+                    $examSubject = $question->exam->subject;
+                    if (!isset($resultsBySubject[$examSubject])) {
+                        $resultsBySubject[$examSubject] = [];
+                    }
+                    $resultsBySubject[$examSubject][] = $result;
+                }
+            }
+
+            // Calculate analytics for each subject
+            foreach ($attempt->subjects as $subjectData) {
+                $subject = is_array($subjectData) ? $subjectData['subject'] : $subjectData;
+                $subjectResults = $resultsBySubject[$subject] ?? [];
+                
+                $subjectCorrect = collect($subjectResults)->where('is_correct', true)->count();
+                $subjectTotal = count($subjectResults);
+                
+                $subjectAnalytics[] = [
+                    'subject' => $subject,
+                    'correct' => $subjectCorrect,
+                    'total' => $subjectTotal,
+                    'percentage' => $subjectTotal > 0 ? round(($subjectCorrect / $subjectTotal) * 100, 2) : 0,
+                ];
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -279,8 +346,11 @@ class ExamAttemptController extends Controller
                     'percentage' => $attempt->percentage,
                     'time_spent' => $attempt->time_spent,
                     'completed_at' => $attempt->completed_at,
+                    'subjects' => $attempt->subjects,
+                    'duration_minutes' => $attempt->duration_minutes,
                 ],
                 'results' => $results,
+                'subject_analytics' => $subjectAnalytics,
             ],
         ]);
     }

@@ -21,6 +21,8 @@ class ExamAttempt extends Model
         'total_questions',
         'correct_answers',
         'status',
+        'subjects',
+        'duration_minutes',
     ];
 
     protected $casts = [
@@ -30,6 +32,8 @@ class ExamAttempt extends Model
         'score' => 'integer',
         'total_questions' => 'integer',
         'correct_answers' => 'integer',
+        'subjects' => 'array',
+        'duration_minutes' => 'integer',
     ];
 
     /**
