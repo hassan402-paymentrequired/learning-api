@@ -16,6 +16,10 @@ class DashboardController extends Controller
     public function index()
     {
         // Statistics
+        $averageScore = ExamAttempt::where('status', 'completed')
+            ->selectRaw('AVG((correct_answers * 100.0) / NULLIF(total_questions, 0)) as avg_score')
+            ->value('avg_score');
+        
         $stats = [
             'total_users' => User::count(),
             'active_users' => User::where('created_at', '>=', now()->subDays(30))->count(),
@@ -24,9 +28,7 @@ class DashboardController extends Controller
             'total_questions' => Question::count(),
             'total_attempts' => ExamAttempt::count(),
             'completed_attempts' => ExamAttempt::where('status', 'completed')->count(),
-            'average_score' => ExamAttempt::where('status', 'completed')
-                ->selectRaw('AVG((correct_answers * 100.0) / NULLIF(total_questions, 0)) as avg_score')
-                ->value('avg_score') ?? 0,
+            'average_score' => $averageScore ? (float) $averageScore : 0,
         ];
 
         // Recent activity
@@ -78,7 +80,15 @@ class DashboardController extends Controller
             ->groupBy('exams.id', 'exams.title')
             ->orderBy('attempts', 'desc')
             ->limit(5)
-            ->get();
+            ->get()
+            ->map(function ($exam) {
+                return [
+                    'id' => $exam->id,
+                    'title' => $exam->title,
+                    'attempts' => (int) $exam->attempts,
+                    'avg_score' => $exam->avg_score ? (float) $exam->avg_score : 0,
+                ];
+            });
 
         $subjectPerformance = ExamAttempt::where('status', 'completed')
             ->join('exams', 'exam_attempts.exam_id', '=', 'exams.id')
@@ -86,7 +96,14 @@ class DashboardController extends Controller
             ->whereNotNull('exams.subject')
             ->groupBy('exams.subject')
             ->orderBy('attempts', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($subject) {
+                return [
+                    'subject' => $subject->subject,
+                    'attempts' => (int) $subject->attempts,
+                    'avg_score' => $subject->avg_score ? (float) $subject->avg_score : 0,
+                ];
+            });
 
         return Inertia::render('dashboard', [
             'stats' => $stats,
