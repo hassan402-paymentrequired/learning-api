@@ -22,6 +22,7 @@ interface Question {
     question_text: string;
     question_type: string;
     explanation: string | null;
+    exam_types: string[] | null;
     points: number;
     order: number;
     answers: Answer[];
@@ -47,6 +48,9 @@ export default function EditQuestion({ exam, question }: Props) {
         question_text: question.question_text,
         question_type: question.question_type,
         explanation: question.explanation || '',
+        exam_types: (question.exam_types && Array.isArray(question.exam_types)) 
+            ? question.exam_types 
+            : (question.exam_types ? [question.exam_types] : []),
         points: question.points,
         order: question.order,
         answers: question.answers.map(a => ({
@@ -156,6 +160,48 @@ export default function EditQuestion({ exam, question }: Props) {
                                     rows={3}
                                 />
                                 <InputError message={errors.explanation} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label>Available For Exam Types *</Label>
+                                <div className="space-y-2">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="exam_type_jamb"
+                                            checked={data.exam_types.includes('JAMB')}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    setData('exam_types', [...data.exam_types, 'JAMB']);
+                                                } else {
+                                                    setData('exam_types', data.exam_types.filter((t: string) => t !== 'JAMB'));
+                                                }
+                                            }}
+                                        />
+                                        <Label htmlFor="exam_type_jamb" className="font-normal cursor-pointer">
+                                            JAMB
+                                        </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="exam_type_dli"
+                                            checked={data.exam_types.includes('DLI')}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    setData('exam_types', [...data.exam_types, 'DLI']);
+                                                } else {
+                                                    setData('exam_types', data.exam_types.filter((t: string) => t !== 'DLI'));
+                                                }
+                                            }}
+                                        />
+                                        <Label htmlFor="exam_type_dli" className="font-normal cursor-pointer">
+                                            DLI
+                                        </Label>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Select which exam types this question should be available for. You can select both.
+                                </p>
+                                <InputError message={errors.exam_types} />
                             </div>
 
                             <div className="space-y-4">

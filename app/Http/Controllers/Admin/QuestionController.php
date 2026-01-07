@@ -32,7 +32,7 @@ class QuestionController extends Controller
     public function create(Exam $exam)
     {
         return Inertia::render('admin/questions/create', [
-            'exam' => $exam,
+            'exam' => $exam->load('questions'), // Load to get exam_type
         ]);
     }
 
@@ -47,6 +47,8 @@ class QuestionController extends Controller
             'explanation' => 'nullable|string',
             'points' => 'required|integer|min:1',
             'order' => 'required|integer|min:1',
+            'exam_types' => 'required|array|min:1',
+            'exam_types.*' => 'required|in:JAMB,DLI',
             'answers' => 'required|array|min:2',
             'answers.*.answer_text' => 'required|string',
             'answers.*.is_correct' => 'required|boolean',
@@ -63,6 +65,7 @@ class QuestionController extends Controller
             'question_text' => $validated['question_text'],
             'question_type' => $validated['question_type'],
             'explanation' => $validated['explanation'] ?? null,
+            'exam_types' => $validated['exam_types'],
             'points' => $validated['points'],
             'order' => $validated['order'],
         ]);
@@ -90,6 +93,11 @@ class QuestionController extends Controller
     public function edit(Exam $exam, Question $question)
     {
         $question->load('answers');
+        
+        // Ensure exam_types is an array
+        if (!$question->exam_types || !is_array($question->exam_types)) {
+            $question->exam_types = $question->exam->exam_type ? [$question->exam->exam_type] : [];
+        }
 
         return Inertia::render('admin/questions/edit', [
             'exam' => $exam,
@@ -108,6 +116,8 @@ class QuestionController extends Controller
             'explanation' => 'nullable|string',
             'points' => 'required|integer|min:1',
             'order' => 'required|integer|min:1',
+            'exam_types' => 'required|array|min:1',
+            'exam_types.*' => 'required|in:JAMB,DLI',
             'answers' => 'required|array|min:2',
             'answers.*.id' => 'nullable|exists:answers,id',
             'answers.*.answer_text' => 'required|string',
@@ -125,6 +135,7 @@ class QuestionController extends Controller
             'question_text' => $validated['question_text'],
             'question_type' => $validated['question_type'],
             'explanation' => $validated['explanation'] ?? null,
+            'exam_types' => $validated['exam_types'],
             'points' => $validated['points'],
             'order' => $validated['order'],
         ]);

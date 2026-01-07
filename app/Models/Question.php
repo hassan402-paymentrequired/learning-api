@@ -13,6 +13,7 @@ class Question extends Model
 
     protected $fillable = [
         'exam_id',
+        'exam_types',
         'question_text',
         'question_type',
         'explanation',
@@ -24,6 +25,7 @@ class Question extends Model
     protected $casts = [
         'points' => 'integer',
         'order' => 'integer',
+        'exam_types' => 'array',
     ];
 
     /**

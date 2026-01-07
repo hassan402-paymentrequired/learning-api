@@ -32,8 +32,10 @@ Route::middleware('auth:api')->group(function () {
     // Exam routes
     Route::get('/exams', [ExamController::class, 'index']);
     Route::get('/exams/subjects', [ExamController::class, 'subjects']);
+    Route::get('/exams/years', [ExamController::class, 'getAvailableYears']);
     Route::get('/exams/{exam}', [ExamController::class, 'show']);
     Route::get('/exams/{exam}/questions', [ExamController::class, 'questions']);
+    Route::get('/questions/practice', [ExamController::class, 'getPracticeQuestions']);
 
     // Exam attempt routes
     Route::post('/exams/{exam}/start', [ExamAttemptController::class, 'start']);
