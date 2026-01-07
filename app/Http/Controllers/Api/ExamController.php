@@ -113,4 +113,34 @@ class ExamController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Get list of available subjects for an exam type.
+     */
+    public function subjects(Request $request)
+    {
+        $query = Exam::where('is_active', true)
+            ->whereNotNull('subject');
+
+        // Filter by exam type
+        if ($request->has('exam_type')) {
+            $query->where('exam_type', $request->exam_type);
+        }
+
+        // Filter by type (practice or past_question)
+        if ($request->has('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $subjects = $query->distinct()
+            ->pluck('subject')
+            ->filter()
+            ->sort()
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $subjects,
+        ]);
+    }
 }

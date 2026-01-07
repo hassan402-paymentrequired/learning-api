@@ -29,6 +29,7 @@ Route::middleware('auth:api')->group(function () {
 
     // Exam routes
     Route::get('/exams', [ExamController::class, 'index']);
+    Route::get('/exams/subjects', [ExamController::class, 'subjects']);
     Route::get('/exams/{exam}', [ExamController::class, 'show']);
     Route::get('/exams/{exam}/questions', [ExamController::class, 'questions']);
 
