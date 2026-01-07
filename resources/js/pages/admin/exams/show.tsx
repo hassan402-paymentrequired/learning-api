@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
@@ -54,8 +55,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function ShowExam({ exam, import_errors = [] }: Props) {
     const [uploadErrors, setUploadErrors] = useState<string[]>(import_errors);
+    const [questionType, setQuestionType] = useState<'multiple_choice' | 'text_input'>('multiple_choice');
     const { data, setData, post, processing, errors: formErrors } = useForm({
         file: null as File | null,
+        question_type: 'multiple_choice' as 'multiple_choice' | 'text_input',
     });
 
     const handleDelete = (questionId: number) => {
@@ -73,8 +76,14 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
             return;
         }
 
+        setData('question_type', questionType);
+
         post(admin.exams.questions.bulkUpload(exam.id).url, {
             forceFormData: true,
+            data: {
+                ...data,
+                question_type: questionType,
+            },
             onSuccess: () => {
                 setData('file', null);
                 // Reset file input
@@ -85,12 +94,17 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                 if (errors.file) {
                     setUploadErrors([errors.file]);
                 }
+                if (errors.question_type) {
+                    setUploadErrors([...uploadErrors, errors.question_type]);
+                }
             },
         });
     };
 
     const downloadSample = () => {
-        window.location.href = admin.exams.questions.sample(exam.id).url;
+        const url = new URL(admin.exams.questions.sample(exam.id).url);
+        url.searchParams.set('question_type', questionType);
+        window.location.href = url.toString();
     };
 
     return (
@@ -192,7 +206,29 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
 
                             <form onSubmit={handleBulkUpload} className="space-y-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="csv-file">CSV File</Label>
+                                    <Label htmlFor="question_type">Question Type *</Label>
+                                    <Select value={questionType} onValueChange={(value: 'multiple_choice' | 'text_input') => {
+                                        setQuestionType(value);
+                                        setUploadErrors([]);
+                                    }}>
+                                        <SelectTrigger id="question_type">
+                                            <SelectValue placeholder="Select question type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+                                            <SelectItem value="text_input">Text Input</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Select the type of questions you're uploading. The CSV format will differ based on your selection.
+                                    </p>
+                                    {formErrors.question_type && (
+                                        <p className="text-xs text-red-600 dark:text-red-400">{formErrors.question_type}</p>
+                                    )}
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="csv-file">CSV File *</Label>
                                     <Input
                                         id="csv-file"
                                         type="file"
@@ -233,15 +269,26 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
 
                             <div className="pt-4 border-t">
                                 <h4 className="text-sm font-medium mb-2">CSV Format Requirements:</h4>
-                                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                                    <li>Columns: Question Text, Answer A, Answer B, Answer C, Answer D, Answer E (Optional), Correct Answer (A/B/C/D/E), Explanation (Optional), Points, Order</li>
-                                    <li>First row should be headers (will be skipped)</li>
-                                    <li>At least 4 answers (A, B, C, D) are required</li>
-                                    <li>Answer E is optional</li>
-                                    <li>Correct Answer must be A, B, C, D, or E</li>
-                                    <li>Points default to 1 if not specified</li>
-                                    <li>Order will auto-increment if not specified</li>
-                                </ul>
+                                {questionType === 'multiple_choice' ? (
+                                    <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                                        <li>Columns: Question Text, Answer A, Answer B, Answer C, Answer D, Answer E (Optional), Correct Answer (A/B/C/D/E), Explanation (Optional), Points, Order</li>
+                                        <li>First row should be headers (will be skipped)</li>
+                                        <li>At least 4 answers (A, B, C, D) are required</li>
+                                        <li>Answer E is optional</li>
+                                        <li>Correct Answer must be A, B, C, D, or E</li>
+                                        <li>Points default to 1 if not specified</li>
+                                        <li>Order will auto-increment if not specified</li>
+                                    </ul>
+                                ) : (
+                                    <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                                        <li>Columns: Question Text, Expected Answer, Alternative Answers (comma-separated, optional), Explanation (Optional), Points, Order</li>
+                                        <li>First row should be headers (will be skipped)</li>
+                                        <li>Expected Answer is required</li>
+                                        <li>Alternative Answers can be comma-separated for multiple acceptable answers (e.g., "abuja,ABUJA")</li>
+                                        <li>Points default to 1 if not specified</li>
+                                        <li>Order will auto-increment if not specified</li>
+                                    </ul>
+                                )}
                             </div>
                         </div>
                     </CardContent>

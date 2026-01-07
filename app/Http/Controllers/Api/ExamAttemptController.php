@@ -7,8 +7,10 @@ use App\Models\Exam;
 use App\Models\ExamAttempt;
 use App\Models\Question;
 use App\Models\UserAnswer;
+use App\Models\UserStreak;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class ExamAttemptController extends Controller
 {
@@ -164,11 +166,24 @@ class ExamAttemptController extends Controller
         $subjects = $request->input('subjects', $attempt->subjects);
         $durationMinutes = $request->input('duration_minutes', $attempt->duration_minutes);
 
+        // Calculate score based on exam type
+        // For JAMB (UTME), scale to 400 marks
+        $exam = $attempt->exam;
+        $totalQuestions = $attempt->total_questions;
+        
+        if ($exam && $exam->exam_type === 'JAMB' && $totalQuestions > 0) {
+            // JAMB scoring: (correct_answers / total_questions) * 400
+            $score = round(($correctAnswers / $totalQuestions) * 400);
+        } else {
+            // For other exams, use raw score
+            $score = $correctAnswers;
+        }
+
         $updateData = [
             'completed_at' => now(),
             'time_spent' => $totalTimeSpent,
             'correct_answers' => $correctAnswers,
-            'score' => $correctAnswers,
+            'score' => $score,
             'status' => 'completed',
         ];
 
@@ -181,6 +196,19 @@ class ExamAttemptController extends Controller
         }
 
         $attempt->update($updateData);
+
+        // Record streak for today if not already recorded
+        $today = Carbon::today();
+        $existingStreak = UserStreak::where('user_id', auth()->id())
+            ->where('date', $today)
+            ->first();
+
+        if (!$existingStreak) {
+            UserStreak::create([
+                'user_id' => auth()->id(),
+                'date' => $today,
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -271,6 +299,9 @@ class ExamAttemptController extends Controller
                 'message' => 'Exam not completed yet',
             ], 400);
         }
+
+        // Load exam relationship for percentage calculation
+        $attempt->load('exam');
 
         $results = $attempt->userAnswers()
             ->with(['question.answers', 'answer', 'question.exam'])

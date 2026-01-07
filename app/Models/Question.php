@@ -16,6 +16,7 @@ class Question extends Model
         'question_text',
         'question_type',
         'explanation',
+        'expected_answer',
         'points',
         'order',
     ];

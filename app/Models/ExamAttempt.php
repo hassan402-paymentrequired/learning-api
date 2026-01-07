@@ -65,6 +65,12 @@ class ExamAttempt extends Model
      */
     public function getPercentageAttribute(): float
     {
+        // For JAMB, percentage is based on 400 marks
+        if ($this->exam && $this->exam->exam_type === 'JAMB') {
+            return round(($this->score / 400) * 100, 2);
+        }
+
+        // For other exams, percentage is based on total questions
         if ($this->total_questions === 0) {
             return 0;
         }

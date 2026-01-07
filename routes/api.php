@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ExamController;
 use App\Http\Controllers\Api\ExamAttemptController;
+use App\Http\Controllers\Api\StreakController;
+use App\Http\Controllers\Api\AnnouncementController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,4 +43,11 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/exam-attempts/{attempt}', [ExamAttemptController::class, 'show']);
     Route::get('/exam-attempts/{attempt}/results', [ExamAttemptController::class, 'results']);
     Route::get('/analytics', [ExamAttemptController::class, 'analytics']);
+
+    // Streak routes
+    Route::get('/streaks', [StreakController::class, 'index']);
+    Route::post('/streaks/record', [StreakController::class, 'record']);
+
+    // Announcement routes
+    Route::get('/announcements', [AnnouncementController::class, 'index']);
 });

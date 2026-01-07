@@ -181,59 +181,96 @@ class QuestionController extends Controller
     /**
      * Download sample CSV template for bulk upload.
      */
-    public function downloadSample(Exam $exam)
+    public function downloadSample(Request $request, Exam $exam)
     {
+        $questionType = $request->get('question_type', 'multiple_choice'); // Default to multiple_choice
+        
+        $filename = $questionType === 'text_input' 
+            ? 'questions_text_input_template.csv' 
+            : 'questions_multiple_choice_template.csv';
+        
         $headers = [
             'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="questions_template.csv"',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ];
 
-        $callback = function() use ($exam) {
+        $callback = function() use ($questionType) {
             $file = fopen('php://output', 'w');
             
             // Add BOM for Excel compatibility
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
             
-            // Headers
-            fputcsv($file, [
-                'Question Text',
-                'Answer A',
-                'Answer B',
-                'Answer C',
-                'Answer D',
-                'Answer E (Optional)',
-                'Correct Answer (A/B/C/D/E)',
-                'Explanation (Optional)',
-                'Points',
-                'Order'
-            ]);
+            if ($questionType === 'text_input') {
+                // Headers for text input questions
+                fputcsv($file, [
+                    'Question Text',
+                    'Expected Answer',
+                    'Alternative Answers (comma-separated, optional)',
+                    'Explanation (Optional)',
+                    'Points',
+                    'Order'
+                ]);
 
-            // Sample rows
-            fputcsv($file, [
-                'What is 2 + 2?',
-                '3',
-                '4',
-                '5',
-                '6',
-                '',
-                'B',
-                'Basic addition: 2 + 2 = 4',
-                '1',
-                '1'
-            ]);
+                // Sample rows for text input
+                fputcsv($file, [
+                    'What is the capital city of Nigeria?',
+                    'Abuja',
+                    'abuja,ABUJA',
+                    'Abuja became the capital of Nigeria in 1991, replacing Lagos.',
+                    '1',
+                    '1'
+                ]);
 
-            fputcsv($file, [
-                'Which of the following is a prime number?',
-                '4',
-                '5',
-                '6',
-                '8',
-                '',
-                'B',
-                'A prime number is only divisible by 1 and itself. 5 meets this criteria.',
-                '1',
-                '2'
-            ]);
+                fputcsv($file, [
+                    'Name the largest ocean in the world.',
+                    'Pacific Ocean',
+                    'Pacific,pacific ocean',
+                    'The Pacific Ocean covers approximately one-third of the Earth\'s surface.',
+                    '1',
+                    '2'
+                ]);
+            } else {
+                // Headers for multiple choice questions
+                fputcsv($file, [
+                    'Question Text',
+                    'Answer A',
+                    'Answer B',
+                    'Answer C',
+                    'Answer D',
+                    'Answer E (Optional)',
+                    'Correct Answer (A/B/C/D/E)',
+                    'Explanation (Optional)',
+                    'Points',
+                    'Order'
+                ]);
+
+                // Sample rows for multiple choice
+                fputcsv($file, [
+                    'What is 2 + 2?',
+                    '3',
+                    '4',
+                    '5',
+                    '6',
+                    '',
+                    'B',
+                    'Basic addition: 2 + 2 = 4',
+                    '1',
+                    '1'
+                ]);
+
+                fputcsv($file, [
+                    'Which of the following is a prime number?',
+                    '4',
+                    '5',
+                    '6',
+                    '8',
+                    '',
+                    'B',
+                    'A prime number is only divisible by 1 and itself. 5 meets this criteria.',
+                    '1',
+                    '2'
+                ]);
+            }
 
             fclose($file);
         };
@@ -248,8 +285,10 @@ class QuestionController extends Controller
     {
         $request->validate([
             'file' => 'required|file|mimes:csv,txt|max:10240', // 10MB max
+            'question_type' => 'required|in:multiple_choice,text_input',
         ]);
 
+        $questionType = $request->input('question_type');
         $file = $request->file('file');
         $handle = fopen($file->getRealPath(), 'r');
         
@@ -276,76 +315,108 @@ class QuestionController extends Controller
                 continue;
             }
 
-            // Validate row has minimum required columns
-            if (count($row) < 7) {
-                $errors[] = "Row {$rowNumber}: Insufficient columns. Expected at least 7 columns.";
-                continue;
-            }
-
             $questionText = trim($row[0] ?? '');
-            $answerA = trim($row[1] ?? '');
-            $answerB = trim($row[2] ?? '');
-            $answerC = trim($row[3] ?? '');
-            $answerD = trim($row[4] ?? '');
-            $answerE = trim($row[5] ?? '');
-            $correctAnswer = strtoupper(trim($row[6] ?? ''));
-            $explanation = trim($row[7] ?? '');
-            $points = intval($row[8] ?? 1);
-            $order = intval($row[9] ?? $exam->questions()->max('order') + 1);
-
+            
             // Validation
             if (empty($questionText)) {
                 $errors[] = "Row {$rowNumber}: Question text is required.";
                 continue;
             }
 
-            if (empty($answerA) || empty($answerB) || empty($answerC) || empty($answerD)) {
-                $errors[] = "Row {$rowNumber}: At least 4 answers (A, B, C, D) are required.";
-                continue;
-            }
-
-            if (!in_array($correctAnswer, ['A', 'B', 'C', 'D', 'E'])) {
-                $errors[] = "Row {$rowNumber}: Correct answer must be A, B, C, D, or E.";
-                continue;
-            }
-
-            if ($correctAnswer === 'E' && empty($answerE)) {
-                $errors[] = "Row {$rowNumber}: Answer E is marked as correct but is empty.";
-                continue;
-            }
+            $explanation = trim($row[$questionType === 'text_input' ? 3 : 7] ?? '');
+            $points = intval($row[$questionType === 'text_input' ? 4 : 8] ?? 1);
+            $order = intval($row[$questionType === 'text_input' ? 5 : 9] ?? ($exam->questions()->max('order') ?? 0) + 1);
 
             if ($points < 1) {
                 $points = 1;
             }
 
             try {
-                // Create question
-                $question = $exam->questions()->create([
-                    'question_text' => $questionText,
-                    'question_type' => 'multiple_choice',
-                    'explanation' => $explanation ?: null,
-                    'points' => $points,
-                    'order' => $order,
-                ]);
+                if ($questionType === 'text_input') {
+                    // Handle text input questions
+                    $expectedAnswer = trim($row[1] ?? '');
+                    $alternativeAnswers = trim($row[2] ?? '');
+                    
+                    if (empty($expectedAnswer)) {
+                        $errors[] = "Row {$rowNumber}: Expected answer is required for text input questions.";
+                        continue;
+                    }
 
-                // Create answers
-                $answers = [
-                    ['text' => $answerA, 'order' => 'A', 'correct' => $correctAnswer === 'A'],
-                    ['text' => $answerB, 'order' => 'B', 'correct' => $correctAnswer === 'B'],
-                    ['text' => $answerC, 'order' => 'C', 'correct' => $correctAnswer === 'C'],
-                    ['text' => $answerD, 'order' => 'D', 'correct' => $correctAnswer === 'D'],
-                ];
+                    // Combine expected answer and alternatives
+                    $allAnswers = [$expectedAnswer];
+                    if (!empty($alternativeAnswers)) {
+                        $alternatives = array_map('trim', explode(',', $alternativeAnswers));
+                        $allAnswers = array_merge($allAnswers, $alternatives);
+                    }
+                    $expectedAnswerString = implode(',', array_unique($allAnswers));
 
-                if (!empty($answerE)) {
-                    $answers[] = ['text' => $answerE, 'order' => 'E', 'correct' => $correctAnswer === 'E'];
-                }
-
-                foreach ($answers as $answerData) {
-                    $question->answers()->create([
-                        'answer_text' => $answerData['text'],
-                        'is_correct' => $answerData['correct'],
-                        'order' => $answerData['order'],
+                    // Create question
+                    $question = $exam->questions()->create([
+                        'question_text' => $questionText,
+                        'question_type' => 'text_input',
+                        'expected_answer' => $expectedAnswerString,
+                        'explanation' => $explanation ?: null,
+                        'points' => $points,
+                        'order' => $order,
                     ]);
+                } else {
+                    // Handle multiple choice questions
+                    // Validate row has minimum required columns
+                    if (count($row) < 7) {
+                        $errors[] = "Row {$rowNumber}: Insufficient columns. Expected at least 7 columns.";
+                        continue;
+                    }
+
+                    $answerA = trim($row[1] ?? '');
+                    $answerB = trim($row[2] ?? '');
+                    $answerC = trim($row[3] ?? '');
+                    $answerD = trim($row[4] ?? '');
+                    $answerE = trim($row[5] ?? '');
+                    $correctAnswer = strtoupper(trim($row[6] ?? ''));
+
+                    if (empty($answerA) || empty($answerB) || empty($answerC) || empty($answerD)) {
+                        $errors[] = "Row {$rowNumber}: At least 4 answers (A, B, C, D) are required.";
+                        continue;
+                    }
+
+                    if (!in_array($correctAnswer, ['A', 'B', 'C', 'D', 'E'])) {
+                        $errors[] = "Row {$rowNumber}: Correct answer must be A, B, C, D, or E.";
+                        continue;
+                    }
+
+                    if ($correctAnswer === 'E' && empty($answerE)) {
+                        $errors[] = "Row {$rowNumber}: Answer E is marked as correct but is empty.";
+                        continue;
+                    }
+
+                    // Create question
+                    $question = $exam->questions()->create([
+                        'question_text' => $questionText,
+                        'question_type' => 'multiple_choice',
+                        'explanation' => $explanation ?: null,
+                        'points' => $points,
+                        'order' => $order,
+                    ]);
+
+                    // Create answers
+                    $answers = [
+                        ['text' => $answerA, 'order' => 'A', 'correct' => $correctAnswer === 'A'],
+                        ['text' => $answerB, 'order' => 'B', 'correct' => $correctAnswer === 'B'],
+                        ['text' => $answerC, 'order' => 'C', 'correct' => $correctAnswer === 'C'],
+                        ['text' => $answerD, 'order' => 'D', 'correct' => $correctAnswer === 'D'],
+                    ];
+
+                    if (!empty($answerE)) {
+                        $answers[] = ['text' => $answerE, 'order' => 'E', 'correct' => $correctAnswer === 'E'];
+                    }
+
+                    foreach ($answers as $answerData) {
+                        $question->answers()->create([
+                            'answer_text' => $answerData['text'],
+                            'is_correct' => $answerData['correct'],
+                            'order' => $answerData['order'],
+                        ]);
+                    }
                 }
 
                 $imported++;
