@@ -51,8 +51,9 @@ class PracticeAttemptController extends Controller
     /**
      * Display the specified practice attempt.
      */
-    public function show(ExamAttempt $practiceAttempt)
+    public function show($id)
     {
+        $practiceAttempt = ExamAttempt::findOrFail($id);
         $practiceAttempt->load([
             'user',
             'exam',

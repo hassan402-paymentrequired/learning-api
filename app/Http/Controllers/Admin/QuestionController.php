@@ -371,4 +371,40 @@ class QuestionController extends Controller
                 ->with('import_errors', $errors);
         }
     }
+
+    /**
+     * Display all questions across all exams (Question Bank).
+     */
+    public function all(Request $request)
+    {
+        $query = Question::with(['exam', 'answers']);
+
+        // Search
+        if ($request->has('search')) {
+            $query->where('question_text', 'like', '%' . $request->search . '%');
+        }
+
+        // Filter by exam
+        if ($request->has('exam_id')) {
+            $query->where('exam_id', $request->exam_id);
+        }
+
+        // Filter by exam type
+        if ($request->has('exam_type')) {
+            $query->whereHas('exam', function ($q) use ($request) {
+                $q->where('exam_type', $request->exam_type);
+            });
+        }
+
+        $questions = $query->orderBy('created_at', 'desc')->paginate(20);
+
+        // Get all exams for filter
+        $exams = Exam::select('id', 'title', 'exam_type')->orderBy('title')->get();
+
+        return Inertia::render('admin/questions/all', [
+            'questions' => $questions,
+            'exams' => $exams,
+            'filters' => $request->only(['search', 'exam_id', 'exam_type']),
+        ]);
+    }
 }

@@ -35,12 +35,12 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Practice Attempts',
-        href: admin.practiceAttempts.index().url,
+        href: '/admin/practice-attempts',
         icon: Activity,
     },
     {
         title: 'Question Bank',
-        href: admin.questions.index().url,
+        href: '/admin/questions',
         icon: Database,
     },
 ];
