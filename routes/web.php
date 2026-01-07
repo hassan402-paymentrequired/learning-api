@@ -25,6 +25,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('exams/{exam}/questions/sample', [App\Http\Controllers\Admin\QuestionController::class, 'downloadSample'])->name('exams.questions.sample');
         Route::post('exams/{exam}/questions/bulk-upload', [App\Http\Controllers\Admin\QuestionController::class, 'bulkUpload'])->name('exams.questions.bulk-upload');
         Route::get('questions', [App\Http\Controllers\Admin\QuestionController::class, 'all'])->name('questions.index');
+        Route::get('settings', [App\Http\Controllers\Admin\SettingsController::class, 'index'])->name('settings.index');
+        Route::resource('subjects', App\Http\Controllers\Admin\SubjectController::class);
     });
 });
 

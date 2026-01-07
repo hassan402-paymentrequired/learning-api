@@ -2,10 +2,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { BookOpen, Plus, Search } from 'lucide-react';
+import { BookOpen, Plus, Search, Power, PowerOff } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 
@@ -43,6 +44,7 @@ export default function ExamsIndex({ exams, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [type, setType] = useState(filters.type || '');
     const [examType, setExamType] = useState(filters.exam_type || '');
+    const [selectedExams, setSelectedExams] = useState<number[]>([]);
 
     const handleFilter = () => {
         router.get(admin.exams.index().url, {
@@ -53,6 +55,40 @@ export default function ExamsIndex({ exams, filters }: Props) {
             preserveState: true,
             preserveScroll: true,
         });
+    };
+
+    const handleSelectAll = () => {
+        if (selectedExams.length === exams.data.length) {
+            setSelectedExams([]);
+        } else {
+            setSelectedExams(exams.data.map(exam => exam.id));
+        }
+    };
+
+    const handleSelectExam = (examId: number) => {
+        if (selectedExams.includes(examId)) {
+            setSelectedExams(selectedExams.filter(id => id !== examId));
+        } else {
+            setSelectedExams([...selectedExams, examId]);
+        }
+    };
+
+    const handleBulkAction = (action: 'activate' | 'deactivate') => {
+        if (selectedExams.length === 0) {
+            alert('Please select at least one exam.');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to ${action} ${selectedExams.length} exam(s)?`)) {
+            router.post('/admin/exams/bulk-update', {
+                exam_ids: selectedExams,
+                action: action,
+            }, {
+                onSuccess: () => {
+                    setSelectedExams([]);
+                },
+            });
+        }
     };
 
     return (
@@ -71,6 +107,44 @@ export default function ExamsIndex({ exams, filters }: Props) {
                         </a>
                     </Button>
                 </div>
+
+                {/* Bulk Actions */}
+                {selectedExams.length > 0 && (
+                    <Card className="border-primary">
+                        <CardContent className="pt-6">
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium">
+                                    {selectedExams.length} exam(s) selected
+                                </p>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleBulkAction('activate')}
+                                    >
+                                        <Power className="mr-2 h-4 w-4" />
+                                        Activate
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleBulkAction('deactivate')}
+                                    >
+                                        <PowerOff className="mr-2 h-4 w-4" />
+                                        Deactivate
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setSelectedExams([])}
+                                    >
+                                        Clear Selection
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 <Card>
                     <CardHeader>
@@ -122,12 +196,18 @@ export default function ExamsIndex({ exams, filters }: Props) {
                         <Card key={exam.id} className="hover:shadow-lg transition-shadow">
                             <CardHeader>
                                 <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <CardTitle className="text-lg">{exam.title}</CardTitle>
-                                        <CardDescription className="mt-1">
-                                            {exam.exam_type} • {exam.type === 'practice' ? 'Practice' : 'Past Question'}
-                                            {exam.year && ` • ${exam.year}`}
-                                        </CardDescription>
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <Checkbox
+                                            checked={selectedExams.includes(exam.id)}
+                                            onCheckedChange={() => handleSelectExam(exam.id)}
+                                        />
+                                        <div className="flex-1">
+                                            <CardTitle className="text-lg">{exam.title}</CardTitle>
+                                            <CardDescription className="mt-1">
+                                                {exam.exam_type} • {exam.type === 'practice' ? 'Practice' : 'Past Question'}
+                                                {exam.year && ` • ${exam.year}`}
+                                            </CardDescription>
+                                        </div>
                                     </div>
                                     {exam.is_active ? (
                                         <span className="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded">

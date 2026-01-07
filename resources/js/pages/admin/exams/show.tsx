@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
-import { BookOpen, Edit, Plus, Trash2, Upload, Download, AlertCircle } from 'lucide-react';
+import { BookOpen, Edit, Plus, Trash2, Upload, Download, AlertCircle, Copy } from 'lucide-react';
 import admin from '@/routes/admin';
 import { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -103,6 +103,21 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                         <p className="text-muted-foreground">{exam.description || 'No description'}</p>
                     </div>
                     <div className="flex gap-2">
+                        <Button 
+                            variant="outline"
+                            onClick={() => {
+                                if (confirm('Are you sure you want to duplicate this exam? All questions will be copied.')) {
+                                    router.post(`/admin/exams/${exam.id}/duplicate`, {}, {
+                                        onSuccess: () => {
+                                            router.reload();
+                                        },
+                                    });
+                                }
+                            }}
+                        >
+                            <Copy className="mr-2 h-4 w-4" />
+                            Duplicate
+                        </Button>
                         <Button variant="outline" asChild>
                             <Link href={admin.exams.edit(exam.id).url}>
                                 <Edit className="mr-2 h-4 w-4" />

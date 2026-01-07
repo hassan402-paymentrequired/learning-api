@@ -134,4 +134,65 @@ class ExamController extends Controller
         return redirect()->route('admin.exams.index')
             ->with('success', 'Exam deleted successfully.');
     }
+
+    /**
+     * Duplicate an exam with all its questions.
+     */
+    public function duplicate(Exam $exam)
+    {
+        // Create new exam
+        $newExam = $exam->replicate();
+        $newExam->title = $exam->title . ' (Copy)';
+        $newExam->is_active = false; // Set as inactive by default
+        $newExam->total_questions = 0;
+        $newExam->save();
+
+        // Duplicate questions and answers
+        foreach ($exam->questions as $question) {
+            $newQuestion = $question->replicate();
+            $newQuestion->exam_id = $newExam->id;
+            $newQuestion->save();
+
+            // Duplicate answers
+            foreach ($question->answers as $answer) {
+                $newAnswer = $answer->replicate();
+                $newAnswer->question_id = $newQuestion->id;
+                $newAnswer->save();
+            }
+        }
+
+        // Update total questions count
+        $newExam->update([
+            'total_questions' => $newExam->questions()->count(),
+        ]);
+
+        return redirect()->route('admin.exams.show', $newExam)
+            ->with('success', 'Exam duplicated successfully.');
+    }
+
+    /**
+     * Bulk update exams (activate/deactivate).
+     */
+    public function bulkUpdate(Request $request)
+    {
+        $validated = $request->validate([
+            'exam_ids' => 'required|array',
+            'exam_ids.*' => 'exists:exams,id',
+            'action' => 'required|in:activate,deactivate',
+        ]);
+
+        $action = $validated['action'];
+        $isActive = $action === 'activate';
+
+        Exam::whereIn('id', $validated['exam_ids'])
+            ->update(['is_active' => $isActive]);
+
+        $count = count($validated['exam_ids']);
+        $message = $isActive 
+            ? "{$count} exam(s) activated successfully."
+            : "{$count} exam(s) deactivated successfully.";
+
+        return redirect()->route('admin.exams.index')
+            ->with('success', $message);
+    }
 }

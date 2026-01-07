@@ -13,7 +13,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, FileText, Users, Activity, Settings, Database } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, FileText, Users, Activity, Settings, Database, GraduationCap } from 'lucide-react';
 import AppLogo from './app-logo';
 import admin from '@/routes/admin';
 
@@ -42,6 +42,16 @@ const mainNavItems: NavItem[] = [
         title: 'Question Bank',
         href: '/admin/questions',
         icon: Database,
+    },
+    {
+        title: 'Subjects',
+        href: admin.subjects.index().url,
+        icon: GraduationCap,
+    },
+    {
+        title: 'Settings',
+        href: admin.settings.index().url,
+        icon: Settings,
     },
 ];
 
