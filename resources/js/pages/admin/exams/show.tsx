@@ -1,16 +1,37 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { type BreadcrumbItem } from '@/types';
-import { BookOpen, Edit, Plus, Trash2, Upload, Download, AlertCircle, Copy } from 'lucide-react';
 import admin from '@/routes/admin';
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import {
+    AlertCircle,
+    BookOpen,
+    Copy,
+    Download,
+    Edit,
+    Plus,
+    Trash2,
+    Upload,
+} from 'lucide-react';
 import { useState } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Answer {
     id: number;
@@ -33,10 +54,8 @@ interface Exam {
     id: number;
     title: string;
     description: string | null;
-    type: 'practice' | 'past_question';
-    exam_type: 'JAMB' | 'UNILAG' | 'GENERAL';
+    exam_type: 'JAMB' | 'DLI' | 'UNILAG' | 'GENERAL';
     subject: string | null;
-    duration: number;
     total_questions: number;
     year: number | null;
     is_active: boolean;
@@ -55,15 +74,25 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function ShowExam({ exam, import_errors = [] }: Props) {
     const [uploadErrors, setUploadErrors] = useState<string[]>(import_errors);
-    const [questionType, setQuestionType] = useState<'multiple_choice' | 'text_input'>('multiple_choice');
-    const { data, setData, post, processing, errors: formErrors } = useForm({
+    const [questionType, setQuestionType] = useState<
+        'multiple_choice' | 'text_input'
+    >('multiple_choice');
+    const {
+        data,
+        setData,
+        post,
+        processing,
+        errors: formErrors,
+    } = useForm({
         file: null as File | null,
         question_type: 'multiple_choice' as 'multiple_choice' | 'text_input',
     });
 
     const handleDelete = (questionId: number) => {
         if (confirm('Are you sure you want to delete this question?')) {
-            router.delete(admin.exams.questions.destroy(exam?.id, questionId).url);
+            router.delete(
+                admin.exams.questions.destroy(exam?.id, questionId).url,
+            );
         }
     };
 
@@ -87,7 +116,9 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
             onSuccess: () => {
                 setData('file', null);
                 // Reset file input
-                const fileInput = document.getElementById('csv-file') as HTMLInputElement;
+                const fileInput = document.getElementById(
+                    'csv-file',
+                ) as HTMLInputElement;
                 if (fileInput) fileInput.value = '';
             },
             onError: (errors) => {
@@ -114,18 +145,28 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold">{exam.title}</h1>
-                        <p className="text-muted-foreground">{exam.description || 'No description'}</p>
+                        <p className="text-muted-foreground">
+                            {exam.description || 'No description'}
+                        </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button 
+                        <Button
                             variant="outline"
                             onClick={() => {
-                                if (confirm('Are you sure you want to duplicate this exam? All questions will be copied.')) {
-                                    router.post(`/admin/exams/${exam.id}/duplicate`, {}, {
-                                        onSuccess: () => {
-                                            router.reload();
+                                if (
+                                    confirm(
+                                        'Are you sure you want to duplicate this exam? All questions will be copied.',
+                                    )
+                                ) {
+                                    router.post(
+                                        `/admin/exams/${exam.id}/duplicate`,
+                                        {},
+                                        {
+                                            onSuccess: () => {
+                                                router.reload();
+                                            },
                                         },
-                                    });
+                                    );
                                 }
                             }}
                         >
@@ -139,7 +180,9 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                             </Link>
                         </Button>
                         <Button asChild>
-                            <Link href={admin.exams.questions.create(exam.id).url}>
+                            <Link
+                                href={admin.exams.questions.create(exam.id).url}
+                            >
                                 <Plus className="mr-2 h-4 w-4" />
                                 Add Question
                             </Link>
@@ -150,80 +193,125 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                 <div className="grid gap-4 md:grid-cols-3">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-sm font-medium">Exam Type</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Exam Type
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{exam.exam_type}</div>
+                            <div className="text-2xl font-bold">
+                                {exam.exam_type}
+                            </div>
                             <p className="text-xs text-muted-foreground">
-                                {exam.type === 'practice' ? 'Practice Exam' : 'Past Question'}
+                                Past Question
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-sm font-medium">Questions</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Questions
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{exam.questions.length}</div>
-                            <p className="text-xs text-muted-foreground">Total questions</p>
+                            <div className="text-2xl font-bold">
+                                {exam.questions.length}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Total questions
+                            </p>
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-sm font-medium">Duration</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{exam.duration}</div>
-                            <p className="text-xs text-muted-foreground">Minutes</p>
-                        </CardContent>
-                    </Card>
+                    {exam.year && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-sm font-medium">
+                                    Year
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">
+                                    {exam.year}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Exam year
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
                 <Card>
                     <CardHeader>
                         <CardTitle>Bulk Upload Questions</CardTitle>
-                        <CardDescription>Upload multiple questions at once using a CSV file</CardDescription>
+                        <CardDescription>
+                            Upload multiple questions at once using a CSV file
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
                                 <Download className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                                 <div className="flex-1">
                                     <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
                                         Need help with the format?
                                     </p>
                                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                                        Download a sample CSV template to see the required format
+                                        Download a sample CSV template to see
+                                        the required format
                                     </p>
                                 </div>
-                                <Button variant="outline" size="sm" onClick={downloadSample}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={downloadSample}
+                                >
                                     <Download className="mr-2 h-4 w-4" />
                                     Download Sample
                                 </Button>
                             </div>
 
-                            <form onSubmit={handleBulkUpload} className="space-y-4">
+                            <form
+                                onSubmit={handleBulkUpload}
+                                className="space-y-4"
+                            >
                                 <div className="grid gap-2">
-                                    <Label htmlFor="question_type">Question Type *</Label>
-                                    <Select value={questionType} onValueChange={(value: 'multiple_choice' | 'text_input') => {
-                                        setQuestionType(value);
-                                        setUploadErrors([]);
-                                    }}>
+                                    <Label htmlFor="question_type">
+                                        Question Type *
+                                    </Label>
+                                    <Select
+                                        value={questionType}
+                                        onValueChange={(
+                                            value:
+                                                | 'multiple_choice'
+                                                | 'text_input',
+                                        ) => {
+                                            setQuestionType(value);
+                                            setUploadErrors([]);
+                                        }}
+                                    >
                                         <SelectTrigger id="question_type">
                                             <SelectValue placeholder="Select question type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
-                                            <SelectItem value="text_input">Text Input</SelectItem>
+                                            <SelectItem value="multiple_choice">
+                                                Multiple Choice
+                                            </SelectItem>
+                                            <SelectItem value="text_input">
+                                                Text Input
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Select the type of questions you're uploading. The CSV format will differ based on your selection.
+                                        Select the type of questions you're
+                                        uploading. The CSV format will differ
+                                        based on your selection.
                                     </p>
                                     {formErrors.question_type && (
-                                        <p className="text-xs text-red-600 dark:text-red-400">{formErrors.question_type}</p>
+                                        <p className="text-xs text-red-600 dark:text-red-400">
+                                            {formErrors.question_type}
+                                        </p>
                                     )}
                                 </div>
 
@@ -234,59 +322,121 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                         type="file"
                                         accept=".csv,.txt"
                                         onChange={(e) => {
-                                            const file = e.target.files?.[0] || null;
+                                            const file =
+                                                e.target.files?.[0] || null;
                                             setData('file', file);
                                             setUploadErrors([]);
                                         }}
                                         required
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Upload a CSV file with questions. Maximum file size: 10MB
+                                        Upload a CSV file with questions.
+                                        Maximum file size: 10MB
                                     </p>
                                     {formErrors.file && (
-                                        <p className="text-xs text-red-600 dark:text-red-400">{formErrors.file}</p>
+                                        <p className="text-xs text-red-600 dark:text-red-400">
+                                            {formErrors.file}
+                                        </p>
                                     )}
                                     {uploadErrors.length > 0 && (
-                                        <Alert variant="destructive" className="mt-2">
+                                        <Alert
+                                            variant="destructive"
+                                            className="mt-2"
+                                        >
                                             <AlertCircle className="h-4 w-4" />
-                                            <AlertTitle>Upload Errors</AlertTitle>
+                                            <AlertTitle>
+                                                Upload Errors
+                                            </AlertTitle>
                                             <AlertDescription>
-                                                <ul className="list-disc list-inside mt-2">
-                                                    {uploadErrors.map((error, index) => (
-                                                        <li key={index} className="text-sm">{error}</li>
-                                                    ))}
+                                                <ul className="mt-2 list-inside list-disc">
+                                                    {uploadErrors.map(
+                                                        (error, index) => (
+                                                            <li
+                                                                key={index}
+                                                                className="text-sm"
+                                                            >
+                                                                {error}
+                                                            </li>
+                                                        ),
+                                                    )}
                                                 </ul>
                                             </AlertDescription>
                                         </Alert>
                                     )}
                                 </div>
 
-                                <Button type="submit" disabled={processing || !data.file}>
+                                <Button
+                                    type="submit"
+                                    disabled={processing || !data.file}
+                                >
                                     <Upload className="mr-2 h-4 w-4" />
-                                    {processing ? 'Uploading...' : 'Upload Questions'}
+                                    {processing
+                                        ? 'Uploading...'
+                                        : 'Upload Questions'}
                                 </Button>
                             </form>
 
-                            <div className="pt-4 border-t">
-                                <h4 className="text-sm font-medium mb-2">CSV Format Requirements:</h4>
+                            <div className="border-t pt-4">
+                                <h4 className="mb-2 text-sm font-medium">
+                                    CSV Format Requirements:
+                                </h4>
                                 {questionType === 'multiple_choice' ? (
-                                    <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                                        <li>Columns: Question Text, Answer A, Answer B, Answer C, Answer D, Answer E (Optional), Correct Answer (A/B/C/D/E), Explanation (Optional), Points, Order</li>
-                                        <li>First row should be headers (will be skipped)</li>
-                                        <li>At least 4 answers (A, B, C, D) are required</li>
+                                    <ul className="list-inside list-disc space-y-1 text-xs text-muted-foreground">
+                                        <li>
+                                            Columns: Question Text, Answer A,
+                                            Answer B, Answer C, Answer D, Answer
+                                            E (Optional), Correct Answer
+                                            (A/B/C/D/E), Explanation (Optional),
+                                            Points, Order
+                                        </li>
+                                        <li>
+                                            First row should be headers (will be
+                                            skipped)
+                                        </li>
+                                        <li>
+                                            At least 4 answers (A, B, C, D) are
+                                            required
+                                        </li>
                                         <li>Answer E is optional</li>
-                                        <li>Correct Answer must be A, B, C, D, or E</li>
-                                        <li>Points default to 1 if not specified</li>
-                                        <li>Order will auto-increment if not specified</li>
+                                        <li>
+                                            Correct Answer must be A, B, C, D,
+                                            or E
+                                        </li>
+                                        <li>
+                                            Points default to 1 if not specified
+                                        </li>
+                                        <li>
+                                            Order will auto-increment if not
+                                            specified
+                                        </li>
                                     </ul>
                                 ) : (
-                                    <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                                        <li>Columns: Question Text, Expected Answer, Alternative Answers (comma-separated, optional), Explanation (Optional), Points, Order</li>
-                                        <li>First row should be headers (will be skipped)</li>
+                                    <ul className="list-inside list-disc space-y-1 text-xs text-muted-foreground">
+                                        <li>
+                                            Columns: Question Text, Expected
+                                            Answer, Alternative Answers
+                                            (comma-separated, optional),
+                                            Explanation (Optional), Points,
+                                            Order
+                                        </li>
+                                        <li>
+                                            First row should be headers (will be
+                                            skipped)
+                                        </li>
                                         <li>Expected Answer is required</li>
-                                        <li>Alternative Answers can be comma-separated for multiple acceptable answers (e.g., "abuja,ABUJA")</li>
-                                        <li>Points default to 1 if not specified</li>
-                                        <li>Order will auto-increment if not specified</li>
+                                        <li>
+                                            Alternative Answers can be
+                                            comma-separated for multiple
+                                            acceptable answers (e.g.,
+                                            "abuja,ABUJA")
+                                        </li>
+                                        <li>
+                                            Points default to 1 if not specified
+                                        </li>
+                                        <li>
+                                            Order will auto-increment if not
+                                            specified
+                                        </li>
                                     </ul>
                                 )}
                             </div>
@@ -297,14 +447,19 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                 <Card>
                     <CardHeader>
                         <CardTitle>Questions</CardTitle>
-                        <CardDescription>Manage questions for this exam</CardDescription>
+                        <CardDescription>
+                            Manage questions for this exam
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
                             {exam.questions.length === 0 ? (
                                 <div className="py-10 text-center text-muted-foreground">
-                                    <BookOpen className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                                    <p>No questions yet. Add your first question to get started.</p>
+                                    <BookOpen className="mx-auto mb-4 h-12 w-12 opacity-50" />
+                                    <p>
+                                        No questions yet. Add your first
+                                        question to get started.
+                                    </p>
                                 </div>
                             ) : (
                                 exam.questions.map((question) => (
@@ -312,11 +467,22 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                         <CardHeader>
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <Badge variant="outline">Q{question.order}</Badge>
-                                                        <Badge variant="secondary">{question.points} point{question.points !== 1 ? 's' : ''}</Badge>
+                                                    <div className="mb-2 flex items-center gap-2">
+                                                        <Badge variant="outline">
+                                                            Q{question.order}
+                                                        </Badge>
+                                                        <Badge variant="secondary">
+                                                            {question.points}{' '}
+                                                            point
+                                                            {question.points !==
+                                                            1
+                                                                ? 's'
+                                                                : ''}
+                                                        </Badge>
                                                     </div>
-                                                    <CardTitle className="text-base">{question.question_text}</CardTitle>
+                                                    <CardTitle className="text-base">
+                                                        {question.question_text}
+                                                    </CardTitle>
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <Button
@@ -324,14 +490,27 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                                         size="sm"
                                                         asChild
                                                     >
-                                                        <Link href={admin.exams.questions.edit( [exam.id, question.id]).url}>
+                                                        <Link
+                                                            href={
+                                                                admin.exams.questions.edit(
+                                                                    [
+                                                                        exam.id,
+                                                                        question.id,
+                                                                    ],
+                                                                ).url
+                                                            }
+                                                        >
                                                             <Edit className="h-4 w-4" />
                                                         </Link>
                                                     </Button>
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => handleDelete(question.id)}
+                                                        onClick={() =>
+                                                            handleDelete(
+                                                                question.id,
+                                                            )
+                                                        }
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -340,28 +519,49 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                         </CardHeader>
                                         <CardContent>
                                             <div className="space-y-2">
-                                                {question.answers.map((answer) => (
-                                                    <div
-                                                        key={answer.id}
-                                                        className={`p-2 rounded border ${
-                                                            answer.is_correct
-                                                                ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
-                                                                : 'bg-gray-50 border-gray-200 dark:bg-gray-900/20 dark:border-gray-800'
-                                                        }`}
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-medium">{answer.order}.</span>
-                                                            <span>{answer.answer_text}</span>
-                                                            {answer.is_correct && (
-                                                                <Badge variant="default" className="ml-auto">Correct</Badge>
-                                                            )}
+                                                {question.answers.map(
+                                                    (answer) => (
+                                                        <div
+                                                            key={answer.id}
+                                                            className={`rounded border p-2 ${
+                                                                answer.is_correct
+                                                                    ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
+                                                                    : 'border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/20'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium">
+                                                                    {
+                                                                        answer.order
+                                                                    }
+                                                                    .
+                                                                </span>
+                                                                <span>
+                                                                    {
+                                                                        answer.answer_text
+                                                                    }
+                                                                </span>
+                                                                {answer.is_correct && (
+                                                                    <Badge
+                                                                        variant="default"
+                                                                        className="ml-auto"
+                                                                    >
+                                                                        Correct
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    ),
+                                                )}
                                                 {question.explanation && (
-                                                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                                                    <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 dark:border-blue-800 dark:bg-blue-900/20">
                                                         <p className="text-sm">
-                                                            <strong>Explanation:</strong> {question.explanation}
+                                                            <strong>
+                                                                Explanation:
+                                                            </strong>{' '}
+                                                            {
+                                                                question.explanation
+                                                            }
                                                         </p>
                                                     </div>
                                                 )}

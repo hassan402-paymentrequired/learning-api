@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Subject extends Model
@@ -14,6 +15,7 @@ class Subject extends Model
         'name',
         'slug',
         'description',
+        'exam_types',
         'is_active',
         'order',
     ];
@@ -21,7 +23,16 @@ class Subject extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'order' => 'integer',
+        'exam_types' => 'array',
     ];
+
+    /**
+     * Get the questions for the subject.
+     */
+    public function questions(): HasMany
+    {
+        return $this->hasMany(Question::class);
+    }
 
     protected static function boot()
     {

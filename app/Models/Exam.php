@@ -13,10 +13,8 @@ class Exam extends Model
     protected $fillable = [
         'title',
         'description',
-        'type',
         'exam_type',
         'subject',
-        'duration',
         'total_questions',
         'year',
         'is_active',
@@ -24,7 +22,6 @@ class Exam extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
-        'duration' => 'integer',
         'total_questions' => 'integer',
         'year' => 'integer',
     ];

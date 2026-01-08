@@ -14,6 +14,7 @@ interface Subject {
     name: string;
     slug: string;
     description: string | null;
+    exam_types: string[] | null;
     is_active: boolean;
     order: number;
 }
@@ -26,6 +27,9 @@ export default function EditSubject({ subject }: Props) {
     const { data, setData, put, processing, errors } = useForm({
         name: subject.name,
         description: subject.description || '',
+        exam_types: (subject.exam_types && Array.isArray(subject.exam_types)) 
+            ? subject.exam_types 
+            : (subject.exam_types ? [subject.exam_types] : []),
         is_active: subject.is_active,
         order: subject.order,
     });
@@ -103,6 +107,35 @@ export default function EditSubject({ subject }: Props) {
                                 </p>
                                 {errors.order && (
                                     <p className="text-sm text-red-500">{errors.order}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Available for Exam Types *</Label>
+                                <div className="flex gap-4">
+                                    {['JAMB', 'DLI', 'UNILAG', 'GENERAL'].map((type) => (
+                                        <div key={type} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`exam_type_${type}`}
+                                                checked={data.exam_types.includes(type)}
+                                                onCheckedChange={(checked) => {
+                                                    setData('exam_types', checked
+                                                        ? [...data.exam_types, type]
+                                                        : data.exam_types.filter((t) => t !== type)
+                                                    );
+                                                }}
+                                            />
+                                            <Label htmlFor={`exam_type_${type}`} className="font-normal cursor-pointer">
+                                                {type}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Select which exam types this subject should be available for. You can select multiple.
+                                </p>
+                                {errors.exam_types && (
+                                    <p className="text-sm text-red-500">{errors.exam_types}</p>
                                 )}
                             </div>
 

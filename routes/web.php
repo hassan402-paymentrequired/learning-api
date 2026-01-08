@@ -20,11 +20,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('exams', App\Http\Controllers\Admin\ExamController::class);
         Route::post('exams/{exam}/duplicate', [App\Http\Controllers\Admin\ExamController::class, 'duplicate'])->name('exams.duplicate');
         Route::post('exams/bulk-update', [App\Http\Controllers\Admin\ExamController::class, 'bulkUpdate'])->name('exams.bulk-update');
-        Route::resource('exams.questions', App\Http\Controllers\Admin\QuestionController::class)->except(['index', 'show']);
-        Route::get('exams/{exam}/questions', [App\Http\Controllers\Admin\QuestionController::class, 'index'])->name('exams.questions.index');
-        Route::get('exams/{exam}/questions/sample', [App\Http\Controllers\Admin\QuestionController::class, 'downloadSample'])->name('exams.questions.sample');
-        Route::post('exams/{exam}/questions/bulk-upload', [App\Http\Controllers\Admin\QuestionController::class, 'bulkUpload'])->name('exams.questions.bulk-upload');
-        Route::get('questions', [App\Http\Controllers\Admin\QuestionController::class, 'all'])->name('questions.index');
+        // Standalone question management
+        Route::resource('questions', App\Http\Controllers\Admin\QuestionController::class);
+        Route::get('questions/sample/download', [App\Http\Controllers\Admin\QuestionController::class, 'downloadSample'])->name('questions.sample');
+        Route::post('questions/bulk-upload', [App\Http\Controllers\Admin\QuestionController::class, 'bulkUpload'])->name('questions.bulk-upload');
         Route::get('settings', [App\Http\Controllers\Admin\SettingsController::class, 'index'])->name('settings.index');
         Route::resource('subjects', App\Http\Controllers\Admin\SubjectController::class);
     });

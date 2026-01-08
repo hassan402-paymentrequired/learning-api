@@ -14,10 +14,8 @@ interface Exam {
     id: number;
     title: string;
     description: string | null;
-    type: 'practice' | 'past_question';
-    exam_type: 'JAMB' | 'UNILAG' | 'GENERAL';
+    exam_type: 'JAMB' | 'DLI' | 'UNILAG' | 'GENERAL';
     subject: string | null;
-    duration: number;
     total_questions: number;
     year: number | null;
     is_active: boolean;
@@ -35,21 +33,18 @@ interface Props {
     };
     filters: {
         search?: string;
-        type?: string;
         exam_type?: string;
     };
 }
 
 export default function ExamsIndex({ exams, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
-    const [type, setType] = useState(filters.type || '');
     const [examType, setExamType] = useState(filters.exam_type || '');
     const [selectedExams, setSelectedExams] = useState<number[]>([]);
 
     const handleFilter = () => {
         router.get(admin.exams.index().url, {
             search: search || undefined,
-            type: type || undefined,
             exam_type: examType || undefined,
         }, {
             preserveState: true,
@@ -165,17 +160,7 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                     />
                                 </div>
                             </div>
-                            <Select value={type} onValueChange={setType || 'all'}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All Types" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Types</SelectItem>
-                                    <SelectItem value="practice">Practice</SelectItem>
-                                    <SelectItem value="past_question">Past Question</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={examType} onValueChange={setExamType || 'all'}>
+                            <Select value={examType || 'all'} onValueChange={setExamType}>
                                 <SelectTrigger className="w-[180px]">
                                     <SelectValue placeholder="All Exam Types" />
                                 </SelectTrigger>
@@ -204,7 +189,7 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                         <div className="flex-1">
                                             <CardTitle className="text-lg">{exam.title}</CardTitle>
                                             <CardDescription className="mt-1">
-                                                {exam.exam_type} • {exam.type === 'practice' ? 'Practice' : 'Past Question'}
+                                                {exam.exam_type} • Past Question
                                                 {exam.year && ` • ${exam.year}`}
                                             </CardDescription>
                                         </div>
@@ -231,9 +216,6 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                             Subject: {exam.subject}
                                         </div>
                                     )}
-                                    <div className="text-sm text-muted-foreground">
-                                        Duration: {exam.duration} minutes
-                                    </div>
                                     <div className="flex gap-2 pt-2">
                                         <Button
                                             variant="outline"

@@ -20,10 +20,8 @@ export default function CreateExam() {
     const { data, setData, post, processing, errors } = useForm({
         title: '',
         description: '',
-        type: 'practice' as 'practice' | 'past_question',
         exam_type: 'JAMB' as 'JAMB' | 'UNILAG' | 'DLI' | 'GENERAL',
         subject: '',
-        duration: 60,
         year: null as number | null,
         is_active: true,
     });
@@ -39,22 +37,16 @@ export default function CreateExam() {
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div>
                     <h1 className="text-2xl font-bold">Create Exam</h1>
-                    <p className="text-muted-foreground">Add a new practice exam or past question</p>
+                    <p className="text-muted-foreground">Add a new past question exam</p>
                 </div>
 
                 <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10">
                     <CardHeader>
-                        <CardTitle className="text-sm">Student Flow Requirements</CardTitle>
+                        <CardTitle className="text-sm">Note</CardTitle>
                         <CardDescription className="text-xs">
-                            Based on the student app flow: Students choose JAMB/DLI → Select Subject → Choose Practice/Past Questions → Select Question Count → Set Duration (max 120 min)
+                            Exams are now only for past questions. Students select their own duration when taking exams.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="text-xs text-muted-foreground space-y-1">
-                        <p>• Practice exams require a subject (students must select one)</p>
-                        <p>• Maximum duration is 120 minutes (2 hours) per student flow</p>
-                        <p>• Practice sessions are limited to 4 per subject (enforced in app)</p>
-                        <p>• Exam type determines if it appears in JAMB Practice or DLI Practice</p>
-                    </CardContent>
                 </Card>
 
                 <Card>
@@ -90,23 +82,6 @@ export default function CreateExam() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="type">Type *</Label>
-                                    <Select
-                                        value={data.type}
-                                        onValueChange={(value: 'practice' | 'past_question') => setData('type', value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="practice">Practice</SelectItem>
-                                            <SelectItem value="past_question">Past Question</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError message={errors.type} />
-                                </div>
-
-                                <div className="grid gap-2">
                                     <Label htmlFor="exam_type">Exam Type *</Label>
                                     <Select
                                         value={data.exam_type}
@@ -124,61 +99,38 @@ export default function CreateExam() {
                                     </Select>
                                     <InputError message={errors.exam_type} />
                                 </div>
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="subject">
-                                        Subject {data.type === 'practice' && '*'}
-                                    </Label>
+                                    <Label htmlFor="subject">Subject</Label>
                                     <Input
                                         id="subject"
                                         value={data.subject}
                                         onChange={(e) => setData('subject', e.target.value)}
                                         placeholder="e.g., Mathematics"
-                                        required={data.type === 'practice'}
                                     />
                                     <InputError message={errors.subject} />
-                                    {data.type === 'practice' && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Required for practice exams. Students must select a subject.
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="duration">Duration (minutes) *</Label>
-                                    <Input
-                                        id="duration"
-                                        type="number"
-                                        min="1"
-                                        max="120"
-                                        value={data.duration}
-                                        onChange={(e) => setData('duration', parseInt(e.target.value) || 60)}
-                                        required
-                                    />
-                                    <InputError message={errors.duration} />
                                     <p className="text-xs text-muted-foreground">
-                                        Maximum 120 minutes (2 hours) per student flow requirements
+                                        Optional: Subject/course for this past question exam
                                     </p>
                                 </div>
                             </div>
 
-                            {data.type === 'past_question' && (
-                                <div className="grid gap-2">
-                                    <Label htmlFor="year">Year</Label>
-                                    <Input
-                                        id="year"
-                                        type="number"
-                                        min="2000"
-                                        max={new Date().getFullYear() + 1}
-                                        value={data.year || ''}
-                                        onChange={(e) => setData('year', e.target.value ? parseInt(e.target.value) : null)}
-                                        placeholder="e.g., 2024"
-                                    />
-                                    <InputError message={errors.year} />
-                                </div>
-                            )}
+                            <div className="grid gap-2">
+                                <Label htmlFor="year">Year</Label>
+                                <Input
+                                    id="year"
+                                    type="number"
+                                    min="2000"
+                                    max={new Date().getFullYear() + 1}
+                                    value={data.year || ''}
+                                    onChange={(e) => setData('year', e.target.value ? parseInt(e.target.value) : null)}
+                                    placeholder="e.g., 2024"
+                                />
+                                <InputError message={errors.year} />
+                                <p className="text-xs text-muted-foreground">
+                                    Year for this past question exam
+                                </p>
+                            </div>
 
                             <div className="flex items-center space-x-2">
                                 <Checkbox

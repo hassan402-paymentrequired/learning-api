@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Exam;
 use App\Models\Question;
+use App\Models\Subject;
 use Illuminate\Http\Request;
 
 class ExamController extends Controller
@@ -22,10 +23,7 @@ class ExamController extends Controller
             $query->where('exam_type', $request->exam_type);
         }
 
-        // Filter by type (practice or past_question)
-        if ($request->has('type')) {
-            $query->where('type', $request->type);
-        }
+        // Note: type filter removed - exams are now only for past questions
 
         // Filter by subject
         if ($request->has('subject')) {
@@ -107,7 +105,6 @@ class ExamController extends Controller
                 'exam' => [
                     'id' => $exam->id,
                     'title' => $exam->title,
-                    'duration' => $exam->duration,
                     'total_questions' => $exam->questions_count,
                 ],
                 'questions' => $questions,
@@ -128,10 +125,8 @@ class ExamController extends Controller
             $query->where('exam_type', $request->exam_type);
         }
 
-        // Filter by type (practice or past_question)
-        if ($request->has('type')) {
-            $query->where('type', $request->type);
-        }
+        // Note: type filter removed - exams are now only for past questions
+        // For practice questions, subjects should be fetched from the subjects table
 
         $subjects = $query->distinct()
             ->pluck('subject')
@@ -152,7 +147,7 @@ class ExamController extends Controller
     public function getPracticeQuestions(Request $request)
     {
         $request->validate([
-            'exam_type' => 'required|in:JAMB,DLI',
+            'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'subject' => 'required|string',
             'count' => 'required|integer|min:1|max:100',
         ]);
@@ -161,46 +156,47 @@ class ExamController extends Controller
         $subject = $request->input('subject');
         $count = $request->input('count');
 
-        // Get random questions from practice exams matching criteria
-        $questions = Question::whereHas('exam', function ($query) use ($subject) {
-            $query->where('type', 'practice')
-                  ->where('subject', $subject)
-                  ->where('is_active', true);
-        })
-        ->where(function ($query) use ($examType) {
-            // Question must have this exam_type in its exam_types array
-            // Or if exam_types is null, fallback to exam's exam_type
-            $query->whereJsonContains('exam_types', $examType)
-                  ->orWhere(function ($q) use ($examType) {
-                      $q->whereNull('exam_types')
-                        ->whereHas('exam', function ($examQuery) use ($examType) {
-                            $examQuery->where('exam_type', $examType);
-                        });
-                  });
-        })
-        ->inRandomOrder()
-        ->limit($count)
-        ->with(['answers' => function ($query) {
-            $query->select('id', 'question_id', 'answer_text', 'order')
-                  ->orderBy('order');
-        }])
-        ->get()
-        ->map(function ($question, $index) {
-            return [
-                'id' => $question->id,
-                'question_text' => $question->question_text,
-                'question_type' => $question->question_type,
-                'points' => $question->points,
-                'order' => $index + 1, // Reorder from 1
-                'answers' => $question->answers->map(function ($answer) {
-                    return [
-                        'id' => $answer->id,
-                        'answer_text' => $answer->answer_text,
-                        'order' => $answer->order,
-                    ];
-                }),
-            ];
-        });
+        // For practice questions, fetch directly from questions table based on subject and exam_types
+        // Questions can exist independently of exams for practice mode
+        $subjectModel = Subject::where('name', $subject)->first();
+
+        if (!$subjectModel) {
+            return response()->json([
+                'success' => false,
+                'message' => "Subject '{$subject}' not found.",
+                'data' => [],
+            ], 404);
+        }
+
+        // Get random questions that:
+        // 1. Belong to the requested subject (subject_id)
+        // 2. Have the requested exam_type in their exam_types array
+        // 3. Questions should be available for practice (can be standalone or linked to any exam)
+        $questions = Question::where('subject_id', $subjectModel->id)
+            ->whereJsonContains('exam_types', $examType)
+            ->inRandomOrder()
+            ->limit($count)
+            ->with(['answers' => function ($query) {
+                $query->select('id', 'question_id', 'answer_text', 'order')
+                    ->orderBy('order');
+            }])
+            ->get()
+            ->map(function ($question, $index) {
+                return [
+                    'id' => $question->id,
+                    'question_text' => $question->question_text,
+                    'question_type' => $question->question_type,
+                    'points' => $question->points,
+                    'order' => $index + 1, // Reorder from 1
+                    'answers' => $question->answers->map(function ($answer) {
+                        return [
+                            'id' => $answer->id,
+                            'answer_text' => $answer->answer_text,
+                            'order' => $answer->order,
+                        ];
+                    }),
+                ];
+            });
 
         if ($questions->count() < $count) {
             return response()->json([
@@ -223,19 +219,19 @@ class ExamController extends Controller
     public function getAvailableYears(Request $request)
     {
         $request->validate([
-            'exam_type' => 'required|in:JAMB,DLI',
-            'subject' => 'nullable|string',
-            'type' => 'required|in:past_question',
+            'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'subjects' => 'required|array|min:1',
+            'subjects.*' => 'required|string',
         ]);
 
+        // Exams are now only for past questions, so no need to filter by type
         $query = Exam::where('is_active', true)
-            ->where('type', 'past_question')
             ->where('exam_type', $request->input('exam_type'))
             ->whereNotNull('year');
 
-        // Filter by subject if provided
-        if ($request->has('subject') && $request->subject) {
-            $query->where('subject', $request->subject);
+        // Filter by subjects if provided (array of subject names)
+        if ($request->has('subjects') && is_array($request->subjects) && count($request->subjects) > 0) {
+            $query->whereIn('subject', $request->input('subjects'));
         }
 
         $years = $query->distinct()

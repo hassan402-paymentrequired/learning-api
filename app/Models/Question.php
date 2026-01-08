@@ -13,6 +13,7 @@ class Question extends Model
 
     protected $fillable = [
         'exam_id',
+        'subject_id',
         'exam_types',
         'question_text',
         'question_type',
@@ -29,11 +30,19 @@ class Question extends Model
     ];
 
     /**
-     * Get the exam that owns the question.
+     * Get the exam that owns the question (nullable - questions can exist independently).
      */
     public function exam(): BelongsTo
     {
         return $this->belongsTo(Exam::class);
+    }
+
+    /**
+     * Get the subject that owns the question.
+     */
+    public function subject(): BelongsTo
+    {
+        return $this->belongsTo(Subject::class);
     }
 
     /**

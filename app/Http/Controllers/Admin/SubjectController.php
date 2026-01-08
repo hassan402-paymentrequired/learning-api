@@ -50,6 +50,8 @@ class SubjectController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:subjects,name',
             'description' => 'nullable|string',
+            'exam_types' => 'required|array|min:1',
+            'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'is_active' => 'boolean',
             'order' => 'nullable|integer|min:0',
         ]);
@@ -78,6 +80,8 @@ class SubjectController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:subjects,name,' . $subject->id,
             'description' => 'nullable|string',
+            'exam_types' => 'required|array|min:1',
+            'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'is_active' => 'boolean',
             'order' => 'nullable|integer|min:0',
         ]);

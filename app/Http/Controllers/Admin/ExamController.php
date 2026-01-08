@@ -21,11 +21,6 @@ class ExamController extends Controller
             $query->where('title', 'like', '%' . $request->search . '%');
         }
 
-        // Filter by type
-        if ($request->has('type')) {
-            $query->where('type', $request->type);
-        }
-
         // Filter by exam_type
         if ($request->has('exam_type')) {
             $query->where('exam_type', $request->exam_type);
@@ -35,7 +30,7 @@ class ExamController extends Controller
 
         return Inertia::render('admin/exams/index', [
             'exams' => $exams,
-            'filters' => $request->only(['search', 'type', 'exam_type']),
+            'filters' => $request->only(['search', 'exam_type']),
         ]);
     }
 
@@ -55,18 +50,11 @@ class ExamController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'type' => 'required|in:practice,past_question',
             'exam_type' => 'required|in:JAMB,UNILAG,DLI,GENERAL',
             'subject' => 'nullable|string|max:255',
-            'duration' => 'required|integer|min:1|max:120', // Max 2 hours (120 minutes) per student flow
             'year' => 'nullable|integer|min:2000|max:' . (date('Y') + 1),
             'is_active' => 'boolean',
         ]);
-
-        // For practice exams, subject is required (student flow requirement)
-        if ($validated['type'] === 'practice' && empty($validated['subject'])) {
-            return back()->withErrors(['subject' => 'Subject is required for practice exams. Students must select a subject.']);
-        }
 
         $exam = Exam::create($validated);
 
@@ -105,18 +93,11 @@ class ExamController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'type' => 'required|in:practice,past_question',
             'exam_type' => 'required|in:JAMB,UNILAG,DLI,GENERAL',
             'subject' => 'nullable|string|max:255',
-            'duration' => 'required|integer|min:1|max:120', // Max 2 hours (120 minutes) per student flow
             'year' => 'nullable|integer|min:2000|max:' . (date('Y') + 1),
             'is_active' => 'boolean',
         ]);
-
-        // For practice exams, subject is required (student flow requirement)
-        if ($validated['type'] === 'practice' && empty($validated['subject'])) {
-            return back()->withErrors(['subject' => 'Subject is required for practice exams. Students must select a subject.']);
-        }
 
         $exam->update($validated);
 

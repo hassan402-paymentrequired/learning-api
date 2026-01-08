@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Exam;
 use App\Models\Question;
 use App\Models\Answer;
+use App\Models\Subject;
 use Illuminate\Database\Seeder;
 
 class ExamSeeder extends Seeder
@@ -14,37 +15,77 @@ class ExamSeeder extends Seeder
      */
     public function run(): void
     {
-        // JAMB Practice Exams
-        $this->createJAMBPracticeExams();
+        // Create standalone practice questions (not linked to exams)
+        $this->createPracticeQuestions();
         
-        // JAMB Past Questions
+        // Create JAMB Past Questions Exams
         $this->createJAMBPastQuestions();
         
-        // DLI Practice Exams
-        $this->createDLIPracticeExams();
+        // Create DLI Past Questions Exams
+        $this->createDLIPastQuestions();
     }
 
-    private function createJAMBPracticeExams()
+    private function createPracticeQuestions()
     {
-        $subjects = ['Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Economics'];
-        
-        foreach ($subjects as $subject) {
-            $exam = Exam::firstOrCreate(
-                [
-                    'title' => "JAMB Practice - {$subject}",
-                    'exam_type' => 'JAMB',
-                    'type' => 'practice',
-                    'subject' => $subject,
-                ],
-                [
-                    'description' => "Practice questions for {$subject} in JAMB format",
-                    'duration' => 60,
-                    'total_questions' => 20,
-                    'is_active' => true,
-                ]
-            );
+        // Create standalone practice questions for JAMB and DLI
+        // These questions exist independently of exams for practice mode
+        $subjects = [
+            'Mathematics' => ['JAMB', 'DLI'],
+            'English Language' => ['JAMB', 'DLI'],
+            'Physics' => ['JAMB'],
+            'Chemistry' => ['JAMB'],
+            'Biology' => ['JAMB'],
+            'Economics' => ['JAMB', 'DLI'],
+            'Government' => ['JAMB', 'DLI'],
+        ];
 
-            $this->createQuestionsForExam($exam, $subject, 20);
+        foreach ($subjects as $subjectName => $examTypes) {
+            $subject = Subject::where('name', $subjectName)->first();
+            if (!$subject) {
+                continue;
+            }
+
+            $questionData = $this->getQuestionData($subjectName);
+            
+            // Create 50 practice questions for each subject/exam_type combination
+            foreach ($examTypes as $examType) {
+                for ($i = 1; $i <= 50; $i++) {
+                    $questionIndex = ($i - 1) % count($questionData);
+                    $data = $questionData[$questionIndex];
+                    
+                    // Check if question already exists
+                    $exists = Question::where('subject_id', $subject->id)
+                        ->whereJsonContains('exam_types', $examType)
+                        ->where('question_text', $data['question'])
+                        ->exists();
+                    
+                    if ($exists) {
+                        continue;
+                    }
+                    
+                    $question = Question::create([
+                        'subject_id' => $subject->id,
+                        'exam_id' => null, // Standalone practice question
+                        'question_text' => $data['question'],
+                        'question_type' => 'multiple_choice',
+                        'explanation' => $data['explanation'] ?? "This is the correct answer because {$data['correct_answer']}.",
+                        'exam_types' => [$examType],
+                        'points' => 1,
+                        'order' => $i,
+                    ]);
+
+                    // Create answers
+                    $correctIndex = array_search($data['correct_answer'], $data['options']);
+                    foreach ($data['options'] as $index => $option) {
+                        Answer::create([
+                            'question_id' => $question->id,
+                            'answer_text' => $option,
+                            'is_correct' => $index === $correctIndex,
+                            'order' => chr(65 + $index), // A, B, C, D
+                        ]);
+                    }
+                }
+            }
         }
     }
 
@@ -54,60 +95,70 @@ class ExamSeeder extends Seeder
         $years = [2023, 2022, 2021];
         
         foreach ($subjects as $subject) {
+            $subjectModel = Subject::where('name', $subject)->first();
+            if (!$subjectModel) {
+                continue;
+            }
+
             foreach ($years as $year) {
                 $exam = Exam::firstOrCreate(
                     [
                         'title' => "JAMB {$year} - {$subject}",
                         'exam_type' => 'JAMB',
-                        'type' => 'past_question',
                         'subject' => $subject,
                         'year' => $year,
                     ],
                     [
                         'description' => "JAMB {$year} past questions for {$subject}",
-                        'duration' => 90,
-                        'total_questions' => 30,
+                        'total_questions' => 50,
                         'is_active' => true,
                     ]
                 );
 
-                $this->createQuestionsForExam($exam, $subject, 30);
+                $this->createQuestionsForExam($exam, $subjectModel, 50, ['JAMB']);
             }
         }
     }
 
-    private function createDLIPracticeExams()
+    private function createDLIPastQuestions()
     {
         $subjects = ['Mathematics', 'English Language', 'Economics', 'Government'];
+        $years = [2023, 2022, 2021];
         
         foreach ($subjects as $subject) {
-            $exam = Exam::firstOrCreate(
-                [
-                    'title' => "DLI Practice - {$subject}",
-                    'exam_type' => 'DLI',
-                    'type' => 'practice',
-                    'subject' => $subject,
-                ],
-                [
-                    'description' => "Practice questions for {$subject} in DLI format",
-                    'duration' => 60,
-                    'total_questions' => 20,
-                    'is_active' => true,
-                ]
-            );
+            $subjectModel = Subject::where('name', $subject)->first();
+            if (!$subjectModel) {
+                continue;
+            }
 
-            $this->createQuestionsForExam($exam, $subject, 20);
+            foreach ($years as $year) {
+                $exam = Exam::firstOrCreate(
+                    [
+                        'title' => "DLI {$year} - {$subject}",
+                        'exam_type' => 'DLI',
+                        'subject' => $subject,
+                        'year' => $year,
+                    ],
+                    [
+                        'description' => "DLI {$year} past questions for {$subject}",
+                        'total_questions' => 50,
+                        'is_active' => true,
+                    ]
+                );
+
+                $this->createQuestionsForExam($exam, $subjectModel, 50, ['DLI']);
+            }
         }
     }
 
-    private function createQuestionsForExam(Exam $exam, string $subject, int $count)
+    private function createQuestionsForExam(Exam $exam, Subject $subject, int $count, array $examTypes)
     {
         // Check if questions already exist
         if ($exam->questions()->count() > 0) {
             return;
         }
 
-        $questionData = $this->getQuestionData($subject);
+        $questionData = $this->getQuestionData($subject->name);
 
         for ($i = 1; $i <= $count; $i++) {
             $questionIndex = ($i - 1) % count($questionData);
@@ -115,9 +166,11 @@ class ExamSeeder extends Seeder
             
             $question = Question::create([
                 'exam_id' => $exam->id,
+                'subject_id' => $subject->id,
                 'question_text' => $data['question'],
                 'question_type' => 'multiple_choice',
                 'explanation' => $data['explanation'] ?? "This is the correct answer because {$data['correct_answer']}.",
+                'exam_types' => $examTypes,
                 'points' => 1,
                 'order' => $i,
             ]);

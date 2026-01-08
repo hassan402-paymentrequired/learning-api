@@ -25,8 +25,8 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->call([
-            SubjectSeeder::class,
-            ExamSeeder::class,
+            SubjectSeeder::class, // Must run first to create subjects
+            ExamSeeder::class,    // Creates practice questions and past question exams
         ]);
     }
 }

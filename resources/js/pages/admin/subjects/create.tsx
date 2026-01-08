@@ -13,6 +13,7 @@ export default function CreateSubject() {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         description: '',
+        exam_types: [] as string[],
         is_active: true,
         order: 0,
     });
@@ -90,6 +91,35 @@ export default function CreateSubject() {
                                 </p>
                                 {errors.order && (
                                     <p className="text-sm text-red-500">{errors.order}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Available for Exam Types *</Label>
+                                <div className="flex gap-4">
+                                    {['JAMB', 'DLI', 'UNILAG', 'GENERAL'].map((type) => (
+                                        <div key={type} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`exam_type_${type}`}
+                                                checked={data.exam_types.includes(type)}
+                                                onCheckedChange={(checked) => {
+                                                    setData('exam_types', checked
+                                                        ? [...data.exam_types, type]
+                                                        : data.exam_types.filter((t) => t !== type)
+                                                    );
+                                                }}
+                                            />
+                                            <Label htmlFor={`exam_type_${type}`} className="font-normal cursor-pointer">
+                                                {type}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Select which exam types this subject should be available for. You can select multiple.
+                                </p>
+                                {errors.exam_types && (
+                                    <p className="text-sm text-red-500">{errors.exam_types}</p>
                                 )}
                             </div>
 
