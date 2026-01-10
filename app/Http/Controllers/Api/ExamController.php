@@ -122,15 +122,20 @@ class ExamController extends Controller
 
         if ($type === 'practice') {
             // For practice questions, fetch from subjects table based on exam_types
-            $subjects = Subject::whereHas('questions', function ($query) use ($examType) {
-                if ($examType) {
-                    $query->whereJsonContains('exam_types', $examType);
-                }
-            })
-            ->where('is_active', true)
-            ->pluck('name')
-            ->sort()
-            ->values();
+            // Check both subject's exam_types field and questions' exam_types
+            $subjects = Subject::where('is_active', true)
+                ->where(function ($query) use ($examType) {
+                    // Subjects that have the exam_type in their exam_types array
+                    if ($examType) {
+                        $query->whereJsonContains('exam_types', $examType)
+                            ->orWhereHas('questions', function ($q) use ($examType) {
+                                $q->whereJsonContains('exam_types', $examType);
+                            });
+                    }
+                })
+                ->pluck('name')
+                ->sort()
+                ->values();
         } else {
             // For past questions, fetch from exams table
             $query = Exam::where('is_active', true)
