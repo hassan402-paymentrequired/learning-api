@@ -6,6 +6,12 @@ use App\Http\Controllers\Api\ExamController;
 use App\Http\Controllers\Api\ExamAttemptController;
 use App\Http\Controllers\Api\StreakController;
 use App\Http\Controllers\Api\AnnouncementController;
+use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\LeaderboardController;
+use App\Http\Controllers\Api\EmailVerificationController;
+use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\ProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -21,6 +27,20 @@ use App\Http\Controllers\Api\AnnouncementController;
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+// Email verification (public routes)
+Route::post('/email-verification/send-otp', [EmailVerificationController::class, 'sendOtp']);
+Route::post('/email-verification/verify-otp', [EmailVerificationController::class, 'verifyOtp']);
+Route::post('/email-verification/resend-otp', [EmailVerificationController::class, 'resendOtp']);
+
+// Password reset (public routes)
+Route::post('/password-reset/send-otp', [PasswordResetController::class, 'sendOtp']);
+Route::post('/password-reset/verify-otp', [PasswordResetController::class, 'verifyOtp']);
+Route::post('/password-reset/reset', [PasswordResetController::class, 'resetPassword']);
+Route::post('/password-reset/resend-otp', [PasswordResetController::class, 'resendOtp']);
+
+// Paystack callback (public route - called by Paystack)
+Route::get('/subscriptions/callback', [SubscriptionController::class, 'callback']);
 
 // Protected routes
 Route::middleware('auth:api')->group(function () {
@@ -52,4 +72,22 @@ Route::middleware('auth:api')->group(function () {
 
     // Announcement routes
     Route::get('/announcements', [AnnouncementController::class, 'index']);
+
+    // Subscription routes
+    Route::get('/subscriptions/plans', [SubscriptionController::class, 'plans']);
+    Route::get('/subscriptions/status', [SubscriptionController::class, 'status']);
+    Route::post('/subscriptions/initialize-payment', [SubscriptionController::class, 'initializePayment']);
+    Route::post('/subscriptions/verify-payment', [SubscriptionController::class, 'verifyPayment']);
+
+    // Referral routes
+    Route::get('/referrals', [ReferralController::class, 'index']);
+    Route::get('/referrals/code', [ReferralController::class, 'code']);
+
+    // Leaderboard routes
+    Route::get('/leaderboard', [LeaderboardController::class, 'index']);
+    Route::get('/leaderboard/my-rank', [LeaderboardController::class, 'myRank']);
+
+    // Profile routes
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::put('/profile', [ProfileController::class, 'update']);
 });

@@ -117,22 +117,36 @@ class ExamController extends Controller
      */
     public function subjects(Request $request)
     {
-        $query = Exam::where('is_active', true)
-            ->whereNotNull('subject');
+        $examType = $request->input('exam_type');
+        $type = $request->input('type', 'past_question'); // Default to past_question
 
-        // Filter by exam type
-        if ($request->has('exam_type')) {
-            $query->where('exam_type', $request->exam_type);
-        }
-
-        // Note: type filter removed - exams are now only for past questions
-        // For practice questions, subjects should be fetched from the subjects table
-
-        $subjects = $query->distinct()
-            ->pluck('subject')
-            ->filter()
+        if ($type === 'practice') {
+            // For practice questions, fetch from subjects table based on exam_types
+            $subjects = Subject::whereHas('questions', function ($query) use ($examType) {
+                if ($examType) {
+                    $query->whereJsonContains('exam_types', $examType);
+                }
+            })
+            ->where('is_active', true)
+            ->pluck('name')
             ->sort()
             ->values();
+        } else {
+            // For past questions, fetch from exams table
+            $query = Exam::where('is_active', true)
+                ->whereNotNull('subject');
+
+            // Filter by exam type
+            if ($examType) {
+                $query->where('exam_type', $examType);
+            }
+
+            $subjects = $query->distinct()
+                ->pluck('subject')
+                ->filter()
+                ->sort()
+                ->values();
+        }
 
         return response()->json([
             'success' => true,
@@ -236,9 +250,23 @@ class ExamController extends Controller
 
         $years = $query->distinct()
             ->pluck('year')
-            ->filter()
+            ->filter(function ($year) {
+                return $year !== null && $year !== '';
+            })
+            ->map(function ($year) {
+                return (int) $year; // Ensure it's an integer
+            })
             ->sortDesc()
             ->values();
+
+        // If no years found, return empty array with success
+        if ($years->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'message' => 'No past questions found for the selected exam type and subjects.',
+            ]);
+        }
 
         return response()->json([
             'success' => true,

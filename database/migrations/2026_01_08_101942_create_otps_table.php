@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('otps', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade');
+            $table->string('email')->nullable(); // For password reset when user_id is null
+            $table->string('otp', 6); // 6-digit OTP
+            $table->string('type'); // 'email_verification', 'password_reset'
+            $table->boolean('is_used')->default(false);
+            $table->timestamp('expires_at');
+            $table->timestamps();
+
+            $table->index(['email', 'type', 'is_used']);
+            $table->index(['user_id', 'type', 'is_used']);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('otps');
+    }
+};

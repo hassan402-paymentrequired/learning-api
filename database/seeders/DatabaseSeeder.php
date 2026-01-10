@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->call([
+            SubscriptionPlanSeeder::class, // Create subscription plan
             SubjectSeeder::class, // Must run first to create subjects
             ExamSeeder::class,    // Creates practice questions and past question exams
         ]);
