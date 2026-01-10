@@ -162,18 +162,28 @@ class ExamController extends Controller
     /**
      * Get random practice questions by exam_type and subject.
      * Used for practice mode where questions are randomly selected.
+     * Non-subscribed users are limited to 5 questions maximum.
      */
     public function getPracticeQuestions(Request $request)
     {
+        $user = auth()->user();
+        $hasActiveSubscription = $user->hasActiveSubscription();
+        
+        // Determine max count based on subscription status
+        $maxCount = $hasActiveSubscription ? 100 : 5;
+        
         $request->validate([
             'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'subject' => 'required|string',
-            'count' => 'required|integer|min:1|max:100',
+            'count' => ['required', 'integer', 'min:1', "max:{$maxCount}"],
         ]);
 
         $examType = $request->input('exam_type');
         $subject = $request->input('subject');
-        $count = $request->input('count');
+        $requestedCount = $request->input('count');
+        
+        // Enforce 5-question limit for non-subscribed users
+        $count = $hasActiveSubscription ? $requestedCount : min($requestedCount, 5);
 
         // For practice questions, fetch directly from questions table based on subject and exam_types
         // Questions can exist independently of exams for practice mode
@@ -217,18 +227,24 @@ class ExamController extends Controller
                 ];
             });
 
-        if ($questions->count() < $count) {
-            return response()->json([
-                'success' => true,
-                'data' => $questions,
-                'warning' => "Only {$questions->count()} questions available (requested {$count})",
-            ]);
-        }
-
-        return response()->json([
+        $response = [
             'success' => true,
             'data' => $questions,
-        ]);
+            'has_active_subscription' => $hasActiveSubscription,
+            'max_questions_allowed' => $maxCount,
+        ];
+
+        if ($questions->count() < $count) {
+            $response['warning'] = "Only {$questions->count()} questions available (requested {$count})";
+        }
+
+        // Add message for non-subscribed users if they requested more than 5
+        if (!$hasActiveSubscription && $requestedCount > 5) {
+            $response['message'] = 'Non-subscribed users are limited to 5 questions per practice session. Subscribe to unlock unlimited practice questions.';
+            $response['questions_returned'] = $questions->count();
+        }
+
+        return response()->json($response);
     }
 
     /**
