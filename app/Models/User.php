@@ -40,6 +40,9 @@ class User extends Authenticatable implements JWTSubject
         'two_factor_secret',
         'two_factor_recovery_codes',
         'remember_token',
+        'paystack_customer_code',
+        'subscription_expires_at',
+        'referral_code'
     ];
 
     /**
@@ -129,8 +132,8 @@ class User extends Authenticatable implements JWTSubject
      */
     public function hasActiveSubscription(): bool
     {
-        return $this->subscription_status === 'active' 
-            && $this->subscription_expires_at 
+        return $this->subscription_status === 'active'
+            && $this->subscription_expires_at
             && $this->subscription_expires_at->isFuture();
     }
 
@@ -145,7 +148,7 @@ class User extends Authenticatable implements JWTSubject
 
         // Generate a unique code based on user ID and random string
         $code = strtoupper(substr($this->name, 0, 3) . $this->id . substr(md5($this->email . $this->id), 0, 4));
-        
+
         // Ensure uniqueness
         while (static::where('referral_code', $code)->exists()) {
             $code = strtoupper(substr($this->name, 0, 3) . $this->id . substr(md5($this->email . $this->id . time()), 0, 4));

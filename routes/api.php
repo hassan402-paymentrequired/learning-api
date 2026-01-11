@@ -39,8 +39,9 @@ Route::post('/password-reset/verify-otp', [PasswordResetController::class, 'veri
 Route::post('/password-reset/reset', [PasswordResetController::class, 'resetPassword']);
 Route::post('/password-reset/resend-otp', [PasswordResetController::class, 'resendOtp']);
 
-// Paystack callback (public route - called by Paystack)
+// Paystack callback and cancel (public routes - called by Paystack)
 Route::get('/subscriptions/callback', [SubscriptionController::class, 'callback']);
+Route::get('/subscriptions/cancel', [SubscriptionController::class, 'cancel']);
 
 // Protected routes
 Route::middleware('auth:api')->group(function () {

@@ -83,7 +83,7 @@ class SubscriptionController extends Controller
                     // Store referral relationship (will be finalized after payment)
                     $user->referred_by = $referrer->id;
                     $user->save();
-                    
+
                     // Create or get existing referral record
                     $referral = \App\Models\Referral::firstOrCreate(
                         [
@@ -117,7 +117,7 @@ class SubscriptionController extends Controller
 
         // Initialize Paystack payment
         $paystackSecretKey = config('services.paystack.secret_key');
-        
+
         if (!$paystackSecretKey) {
             return response()->json([
                 'success' => false,
@@ -151,8 +151,7 @@ class SubscriptionController extends Controller
         $reference = 'SUB_' . time() . '_' . $user->id . '_' . uniqid();
 
         // Use backend callback URL - Paystack will redirect here after payment
-        // Backend will then verify and redirect to app
-        $callbackUrl = url('/api/subscriptions/callback');
+        $callbackUrlForPaystack = url('/api/subscriptions/callback');
 
         $paymentResponse = Http::withHeaders([
             'Authorization' => 'Bearer ' . $paystackSecretKey,
@@ -162,7 +161,7 @@ class SubscriptionController extends Controller
             'amount' => $amountInKobo,
             'currency' => 'NGN',
             'reference' => $reference,
-            'callback_url' => $callbackUrl,
+            'callback_url' => $callbackUrlForPaystack,
             'metadata' => [
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
@@ -197,6 +196,12 @@ class SubscriptionController extends Controller
             'status' => 'pending',
         ]);
 
+        // Generate callback and cancel URLs for frontend
+        // Paystack will redirect to callback_url and append ?reference=xxx
+        // So we return the base URL without query params for frontend to detect navigation
+        $callbackUrl = url('/api/subscriptions/callback');
+        $cancelUrl = url('/api/subscriptions/cancel');
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -204,13 +209,16 @@ class SubscriptionController extends Controller
                 'access_code' => $paymentData['access_code'],
                 'reference' => $paymentData['reference'],
                 'subscription_id' => $subscription->id,
+                'callback_url' => $callbackUrl,
+                'cancel_url' => $cancelUrl,
             ],
         ]);
     }
 
     /**
-     * Handle Paystack callback and redirect to app.
+     * Handle Paystack callback (per Paystack WebView documentation).
      * This route is called by Paystack after payment.
+     * Returns a simple HTML page that the WebView can detect.
      */
     public function callback(Request $request)
     {
@@ -218,35 +226,39 @@ class SubscriptionController extends Controller
         $trxref = $request->query('trxref', $reference);
 
         if (!$reference && !$trxref) {
-            // No reference, redirect to app with error
-            return redirect('learningapp://subscription/callback?status=error&message=' . urlencode('Payment reference not found'));
+            // Return error page
+            return response('<!DOCTYPE html><html><head><title>Payment Error</title></head><body><h1>Payment Error</h1><p>Payment reference not found</p></body></html>', 400)
+                ->header('Content-Type', 'text/html');
         }
 
         $reference = $reference ?: $trxref;
 
         // Verify payment with Paystack
         $paystackSecretKey = config('services.paystack.secret_key');
-        
+
         $verifyResponse = Http::withHeaders([
             'Authorization' => 'Bearer ' . $paystackSecretKey,
             'Content-Type' => 'application/json',
         ])->get('https://api.paystack.co/transaction/verify/' . $reference);
 
         if (!$verifyResponse->successful()) {
-            return redirect('learningapp://subscription/callback?status=error&message=' . urlencode('Payment verification failed'));
+            return response('<!DOCTYPE html><html><head><title>Payment Error</title></head><body><h1>Payment Error</h1><p>Payment verification failed</p></body></html>', 400)
+                ->header('Content-Type', 'text/html');
         }
 
         $transactionData = $verifyResponse->json('data');
 
         if ($transactionData['status'] !== 'success') {
-            return redirect('learningapp://subscription/callback?status=error&message=' . urlencode('Payment was not successful'));
+            return response('<!DOCTYPE html><html><head><title>Payment Error</title></head><body><h1>Payment Error</h1><p>Payment was not successful</p></body></html>', 400)
+                ->header('Content-Type', 'text/html');
         }
 
         // Find subscription by reference
         $subscription = Subscription::where('paystack_reference', $reference)->first();
 
         if (!$subscription) {
-            return redirect('learningapp://subscription/callback?status=error&message=' . urlencode('Subscription not found'));
+            return response('<!DOCTYPE html><html><head><title>Payment Error</title></head><body><h1>Payment Error</h1><p>Subscription not found</p></body></html>', 404)
+                ->header('Content-Type', 'text/html');
         }
 
         // Activate subscription if not already active
@@ -297,8 +309,19 @@ class SubscriptionController extends Controller
             });
         }
 
-        // Redirect to app with success
-        return redirect('learningapp://subscription/callback?status=success&reference=' . urlencode($reference));
+        // Return success page (WebView will detect navigation to this URL)
+        return response('<!DOCTYPE html><html><head><title>Payment Successful</title></head><body><h1>Payment Successful</h1><p>Your subscription has been activated. You can close this window.</p></body></html>', 200)
+            ->header('Content-Type', 'text/html');
+    }
+
+    /**
+     * Handle payment cancellation (per Paystack WebView documentation).
+     * Returns a simple HTML page that the WebView can detect.
+     */
+    public function cancel()
+    {
+        return response('<!DOCTYPE html><html><head><title>Payment Cancelled</title></head><body><h1>Payment Cancelled</h1><p>You have cancelled the payment process.</p></body></html>', 200)
+            ->header('Content-Type', 'text/html');
     }
 
     /**
@@ -314,7 +337,7 @@ class SubscriptionController extends Controller
 
         // Verify with Paystack
         $paystackSecretKey = config('services.paystack.secret_key');
-        
+
         $verifyResponse = Http::withHeaders([
             'Authorization' => 'Bearer ' . $paystackSecretKey,
             'Content-Type' => 'application/json',
@@ -331,7 +354,7 @@ class SubscriptionController extends Controller
 
         if ($transactionData['status'] !== 'success') {
             $subscription->update(['status' => 'failed']);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Payment was not successful.',
@@ -409,7 +432,7 @@ class SubscriptionController extends Controller
     public function status(Request $request)
     {
         $user = auth()->user();
-        
+
         $activeSubscription = $user->activeSubscription;
 
         return response()->json([

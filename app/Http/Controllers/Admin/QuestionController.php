@@ -6,9 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Subject;
 use App\Models\Question;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
-class wQuestionController extends Controller
+class QuestionController extends Controller
 {
     /**
      * Display a listing of all questions (standalone).
@@ -66,6 +67,11 @@ class wQuestionController extends Controller
      */
     public function store(Request $request)
     {
+        // Log incoming request data for debugging
+        Log::info('Question creation request', [
+            'data' => $request->all(),
+        ]);
+
         $validated = $request->validate([
             'subject_id' => 'required|exists:subjects,id',
             'question_text' => 'required|string',
@@ -82,55 +88,80 @@ class wQuestionController extends Controller
             'answers.*.order' => 'required_with:answers|string|in:A,B,C,D,E',
         ]);
 
-        // Conditional validation
-        if ($validated['question_type'] === 'multiple_choice') {
-            if (empty($validated['answers']) || count($validated['answers']) < 2) {
-                return back()->withErrors(['answers' => 'Multiple choice questions require at least two answers.']);
+        try {
+            // Conditional validation
+            if ($validated['question_type'] === 'multiple_choice') {
+                if (empty($validated['answers']) || count($validated['answers']) < 2) {
+                    return back()->withErrors(['answers' => 'Multiple choice questions require at least two answers.']);
+                }
+                $hasCorrectAnswer = collect($validated['answers'])->contains('is_correct', true);
+                if (!$hasCorrectAnswer) {
+                    return back()->withErrors(['answers' => 'At least one answer must be marked as correct for multiple choice questions.']);
+                }
+            } else if ($validated['question_type'] === 'true_false') {
+                if (empty($validated['expected_answer'])) {
+                    return back()->withErrors(['expected_answer' => 'True/False questions require an expected answer (true or false).']);
+                }
+                $expectedAnswer = strtolower(trim($validated['expected_answer']));
+                if (!in_array($expectedAnswer, ['true', 'false'])) {
+                    return back()->withErrors(['expected_answer' => 'True/False questions must have an expected answer of either "true" or "false".']);
+                }
+                $validated['expected_answer'] = $expectedAnswer; // Normalize to lowercase
+                $validated['answers'] = [];
+            } else {
+                if (empty($validated['expected_answer'])) {
+                    return back()->withErrors(['expected_answer' => 'Text/Numeric input questions require an expected answer.']);
+                }
+                $validated['answers'] = [];
             }
-            $hasCorrectAnswer = collect($validated['answers'])->contains('is_correct', true);
-            if (!$hasCorrectAnswer) {
-                return back()->withErrors(['answers' => 'At least one answer must be marked as correct for multiple choice questions.']);
-            }
-        } else if ($validated['question_type'] === 'true_false') {
-            if (empty($validated['expected_answer'])) {
-                return back()->withErrors(['expected_answer' => 'True/False questions require an expected answer (true or false).']);
-            }
-            $expectedAnswer = strtolower(trim($validated['expected_answer']));
-            if (!in_array($expectedAnswer, ['true', 'false'])) {
-                return back()->withErrors(['expected_answer' => 'True/False questions must have an expected answer of either "true" or "false".']);
-            }
-            $validated['expected_answer'] = $expectedAnswer; // Normalize to lowercase
-            $validated['answers'] = [];
-        } else {
-            if (empty($validated['expected_answer'])) {
-                return back()->withErrors(['expected_answer' => 'Text/Numeric input questions require an expected answer.']);
-            }
-            $validated['answers'] = [];
-        }
 
-        $question = Question::create([
-            'subject_id' => $validated['subject_id'],
-            'question_text' => $validated['question_text'],
-            'question_type' => $validated['question_type'],
-            'explanation' => $validated['explanation'] ?? null,
-            'expected_answer' => $validated['expected_answer'] ?? null,
-            'exam_types' => $validated['exam_types'],
-            'points' => $validated['points'],
-            'order' => $validated['order'],
-        ]);
+            Log::info('Creating question with validated data', [
+                'validated' => $validated,
+            ]);
 
-        if ($validated['question_type'] === 'multiple_choice') {
-            foreach ($validated['answers'] as $answerData) {
-                $question->answers()->create([
-                    'answer_text' => $answerData['answer_text'],
-                    'is_correct' => $answerData['is_correct'],
-                    'order' => $answerData['order'],
+            $question = Question::create([
+                'subject_id' => $validated['subject_id'],
+                'question_text' => $validated['question_text'],
+                'question_type' => $validated['question_type'],
+                'explanation' => $validated['explanation'] ?? null,
+                'expected_answer' => $validated['expected_answer'] ?? null,
+                'exam_types' => $validated['exam_types'],
+                'points' => $validated['points'],
+                'order' => $validated['order'],
+            ]);
+
+            Log::info('Question created successfully', [
+                'question_id' => $question->id,
+            ]);
+
+            if ($validated['question_type'] === 'multiple_choice') {
+                foreach ($validated['answers'] as $answerData) {
+                    $question->answers()->create([
+                        'answer_text' => $answerData['answer_text'],
+                        'is_correct' => $answerData['is_correct'],
+                        'order' => $answerData['order'],
+                    ]);
+                }
+                Log::info('Answers created successfully', [
+                    'question_id' => $question->id,
+                    'answer_count' => count($validated['answers']),
                 ]);
             }
-        }
 
-        return redirect()->route('admin.questions.index')
-            ->with('success', 'Question created successfully.');
+            return redirect()->route('admin.questions.index')
+                ->with('success', 'Question created successfully.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation error creating question', [
+                'errors' => $e->errors(),
+            ]);
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('Error creating question', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return back()->withErrors(['error' => 'Error creating question: ' . $e->getMessage()]);
+        }
     }
 
     /**
@@ -283,11 +314,11 @@ class wQuestionController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ];
 
-        $callback = function() use ($questionType) {
+        $callback = function () use ($questionType) {
             $file = fopen('php://output', 'w');
 
             // Add BOM for Excel compatibility
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
             if ($questionType === 'text_input' || $questionType === 'numeric_input') {
                 // Headers for text/numeric input questions
@@ -445,7 +476,7 @@ class wQuestionController extends Controller
             $examTypes = [];
             if (!empty($examTypesString)) {
                 $examTypes = array_map('trim', explode(',', $examTypesString));
-                $examTypes = array_filter($examTypes, function($type) {
+                $examTypes = array_filter($examTypes, function ($type) {
                     return in_array(strtoupper($type), ['JAMB', 'DLI', 'UNILAG', 'GENERAL']);
                 });
                 $examTypes = array_map('strtoupper', $examTypes);
