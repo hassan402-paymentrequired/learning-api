@@ -90,7 +90,8 @@ class StreakController extends Controller
     }
 
     /**
-     * Calculate current streak (consecutive days).
+     * Calculate current streak (consecutive days) - Duolingo style.
+     * Streak resets to 0 if any day is missed.
      */
     private function calculateCurrentStreak($userId): int
     {
@@ -98,26 +99,55 @@ class StreakController extends Controller
             ->orderBy('date', 'desc')
             ->get()
             ->pluck('date')
+            ->map(fn($d) => $d->format('Y-m-d'))
             ->toArray();
 
         if (empty($streaks)) {
             return 0;
         }
 
-        $currentStreak = 0;
         $today = Carbon::today();
-        $checkDate = $today->copy();
+        $yesterday = $today->copy()->subDay();
+        $todayStr = $today->format('Y-m-d');
+        $yesterdayStr = $yesterday->format('Y-m-d');
 
-        // Check if today has a streak
-        if (!in_array($checkDate->format('Y-m-d'), array_map(fn($d) => $d->format('Y-m-d'), $streaks))) {
-            // If today doesn't have a streak, check yesterday
-            $checkDate = $today->copy()->subDay();
+        // For Duolingo-style: check if user practiced today OR yesterday
+        // If they practiced today, start from today
+        // If they didn't practice today but practiced yesterday, start from yesterday
+        $startDate = $today->copy();
+        
+        if (!in_array($todayStr, $streaks)) {
+            // No streak today, check if there's one yesterday
+            if (!in_array($yesterdayStr, $streaks)) {
+                // No streak today or yesterday - streak is broken
+                return 0;
+            }
+            // Streak yesterday but not today - start from yesterday
+            $startDate = $yesterday->copy();
         }
+        // If today has a streak, start from today
 
-        // Count consecutive days backwards
-        while (in_array($checkDate->format('Y-m-d'), array_map(fn($d) => $d->format('Y-m-d'), $streaks))) {
-            $currentStreak++;
-            $checkDate->subDay();
+        // Count consecutive days backwards from start date
+        // If any day is missing, streak breaks
+        $currentStreak = 0;
+        $checkDate = $startDate->copy();
+
+        while (true) {
+            $checkDateStr = $checkDate->format('Y-m-d');
+            
+            // If this date has a streak, increment counter
+            if (in_array($checkDateStr, $streaks)) {
+                $currentStreak++;
+                $checkDate->subDay();
+            } else {
+                // Missing day found - streak is broken
+                break;
+            }
+
+            // Safety check to prevent infinite loop (max 10 years back)
+            if ($currentStreak > 3650) {
+                break;
+            }
         }
 
         return $currentStreak;
