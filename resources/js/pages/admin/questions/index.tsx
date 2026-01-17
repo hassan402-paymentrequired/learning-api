@@ -1,15 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { router, useForm } from '@inertiajs/react';
+import { router, useForm, Link } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { Search, FileQuestion, Plus, Upload, Download, Edit, Trash2 } from 'lucide-react';
+import { Search, FileQuestion, Plus, Upload, Download, Edit } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Link } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 
@@ -63,7 +63,7 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
     const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
     const [selectedQuestionType, setSelectedQuestionType] = useState<'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false'>('multiple_choice');
 
-    const { data, setData, post, processing, errors } = useForm({
+    const {  setData, post, processing, errors } = useForm({
         file: null as File | null,
         question_type: 'multiple_choice' as 'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false',
     });
@@ -78,14 +78,6 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
             preserveState: true,
             preserveScroll: true,
         });
-    };
-
-    const handleSelectAll = () => {
-        if (selectedQuestions.length === questions.data.length) {
-            setSelectedQuestions([]);
-        } else {
-            setSelectedQuestions(questions.data.map(q => q.id));
-        }
     };
 
     const handleSelectQuestion = (questionId: number) => {
@@ -199,10 +191,10 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                             </DialogContent>
                         </Dialog>
                         <Button asChild>
-                            <a href={admin.questions.create().url}>
+                            <Link href={admin.questions.create().url}>
                                 <Plus className="mr-2 h-4 w-4" />
                                 Create Question
-                            </a>
+                            </Link>
                         </Button>
                     </div>
                 </div>

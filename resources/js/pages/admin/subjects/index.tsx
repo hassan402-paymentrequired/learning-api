@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { BookOpen, Plus, Search, Power, PowerOff, Edit, Trash2, ArrowLeft } from 'lucide-react';
+import { BookOpen, Plus, Search, Power, PowerOff,  Trash2, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 import { Link } from '@inertiajs/react';
@@ -49,14 +49,6 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
             preserveState: true,
             preserveScroll: true,
         });
-    };
-
-    const handleSelectAll = () => {
-        if (selectedSubjects.length === subjects.data.length) {
-            setSelectedSubjects([]);
-        } else {
-            setSelectedSubjects(subjects.data.map(subject => subject.id));
-        }
     };
 
     const handleSelectSubject = (subjectId: number) => {

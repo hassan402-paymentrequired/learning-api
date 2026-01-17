@@ -15,17 +15,60 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Admin routes
     Route::prefix('admin')->name('admin.')->group(function () {
-        Route::resource('users', App\Http\Controllers\Admin\UserController::class)->only(['index', 'show']);
-        Route::resource('practice-attempts', App\Http\Controllers\Admin\PracticeAttemptController::class)->only(['index', 'show']);
-        Route::resource('exams', App\Http\Controllers\Admin\ExamController::class);
-        Route::post('exams/{exam}/duplicate', [App\Http\Controllers\Admin\ExamController::class, 'duplicate'])->name('exams.duplicate');
-        Route::post('exams/bulk-update', [App\Http\Controllers\Admin\ExamController::class, 'bulkUpdate'])->name('exams.bulk-update');
-        // Standalone question management
-        Route::resource('questions', App\Http\Controllers\Admin\QuestionController::class);
-        Route::get('questions/sample/download', [App\Http\Controllers\Admin\QuestionController::class, 'downloadSample'])->name('questions.sample');
-        Route::post('questions/bulk-upload', [App\Http\Controllers\Admin\QuestionController::class, 'bulkUpload'])->name('questions.bulk-upload');
+        // Users routes
+        Route::prefix('users')->name('users.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\UserController::class, 'index'])->name('index');
+            Route::get('/{user}', [App\Http\Controllers\Admin\UserController::class, 'show'])->name('show');
+        });
+
+        // Practice Attempts routes
+        Route::prefix('practice-attempts')->name('practice-attempts.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\PracticeAttemptController::class, 'index'])->name('index');
+            Route::get('/{practiceAttempt}', [App\Http\Controllers\Admin\PracticeAttemptController::class, 'show'])->name('show');
+        });
+
+        // Exams routes
+        Route::prefix('exams')->name('exams.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\ExamController::class, 'index'])->name('index');
+            Route::get('/create', [App\Http\Controllers\Admin\ExamController::class, 'create'])->name('create');
+            Route::post('/', [App\Http\Controllers\Admin\ExamController::class, 'store'])->name('store');
+            Route::get('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'show'])->name('show');
+            Route::get('/{exam}/edit', [App\Http\Controllers\Admin\ExamController::class, 'edit'])->name('edit');
+            // Route::put('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'update'])->name('update');
+            Route::patch('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'update'])->name('update');
+            Route::delete('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'destroy'])->name('destroy');
+            Route::post('/{exam}/duplicate', [App\Http\Controllers\Admin\ExamController::class, 'duplicate'])->name('duplicate');
+            Route::post('/bulk-update', [App\Http\Controllers\Admin\ExamController::class, 'bulkUpdate'])->name('bulk-update');
+        });
+
+        // Questions routes
+        Route::prefix('questions')->name('questions.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\QuestionController::class, 'index'])->name('index');
+            Route::get('/create', [App\Http\Controllers\Admin\QuestionController::class, 'create'])->name('create');
+            Route::post('/', [App\Http\Controllers\Admin\QuestionController::class, 'store'])->name('store');
+            Route::get('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'show'])->name('show');
+            Route::get('/{question}/edit', [App\Http\Controllers\Admin\QuestionController::class, 'edit'])->name('edit');
+            // Route::put('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'update'])->name('update');
+            Route::patch('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'update'])->name('update');
+            Route::delete('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'destroy'])->name('destroy');
+            Route::get('/sample/download', [App\Http\Controllers\Admin\QuestionController::class, 'downloadSample'])->name('sample');
+            Route::post('/bulk-upload', [App\Http\Controllers\Admin\QuestionController::class, 'bulkUpload'])->name('bulk-upload');
+        });
+
+        // Subjects routes
+        Route::prefix('subjects')->name('subjects.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\SubjectController::class, 'index'])->name('index');
+            Route::get('/create', [App\Http\Controllers\Admin\SubjectController::class, 'create'])->name('create');
+            Route::post('/', [App\Http\Controllers\Admin\SubjectController::class, 'store'])->name('store');
+            Route::get('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'show'])->name('show');
+            Route::get('/{subject}/edit', [App\Http\Controllers\Admin\SubjectController::class, 'edit'])->name('edit');
+            // Route::put('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'update'])->name('update');
+            Route::patch('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'update'])->name('update');
+            Route::delete('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'destroy'])->name('destroy');
+        });
+
+        // Settings routes
         Route::get('settings', [App\Http\Controllers\Admin\SettingsController::class, 'index'])->name('settings.index');
-        Route::resource('subjects', App\Http\Controllers\Admin\SubjectController::class);
     });
 });
 

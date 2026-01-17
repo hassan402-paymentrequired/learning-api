@@ -16,18 +16,18 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         User::firstOrCreate(
-            ['email' => 'test@example.com'],
+            ['email' => 'balogun@initsng.com'],
             [
                 'name' => 'Test User',
-                'password' => bcrypt('password'),
+                'password' => bcrypt('1234567890'),
                 'email_verified_at' => now(),
             ]
         );
 
-        $this->call([
-            SubscriptionPlanSeeder::class, // Create subscription plan
-            SubjectSeeder::class, // Must run first to create subjects
-            ExamSeeder::class,    // Creates practice questions and past question exams
-        ]);
+        // $this->call([
+        //     SubscriptionPlanSeeder::class, 
+        //     SubjectSeeder::class,
+        //     ExamSeeder::class,   
+        // ]);
     }
 }

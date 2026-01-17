@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,8 +22,10 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import admin from '@/routes/admin';
 import { type BreadcrumbItem } from '@/types';
-import { Form, Head, useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useEffect } from 'react';
 
 interface Subject {
     id: number;
@@ -57,6 +60,20 @@ export default function CreateQuestion({ subjects }: Props) {
             { answer_text: '', is_correct: false, order: 'B' },
         ] as Array<{ answer_text: string; is_correct: boolean; order: string }>,
     });
+
+    // Clear answers when question type changes to non-multiple_choice
+    useEffect(() => {
+        if (data.question_type !== 'multiple_choice') {
+            setData('answers', []);
+        } else if (data.answers.length === 0) {
+            // Re-initialize answers if switching back to multiple_choice
+            setData('answers', [
+                { answer_text: '', is_correct: false, order: 'A' },
+                { answer_text: '', is_correct: false, order: 'B' },
+            ]);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.question_type]);
 
     const addAnswer = () => {
         const orders = ['A', 'B', 'C', 'D', 'E'];
@@ -99,7 +116,32 @@ export default function CreateQuestion({ subjects }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(admin.questions.store().url);
+        
+        post('/admin/questions', {
+            transform: (formData) => {
+                // Create a new object without answers for non-multiple_choice questions
+                if (formData.question_type !== 'multiple_choice') {
+                    const { answers, ...rest } = formData;
+                    return rest;
+                }
+                return formData;
+            },
+            onError: (errors: any) => {
+                // Show toast notification for errors
+                const errorMessages = Object.values(errors).flat();
+                if (errorMessages.length > 0) {
+                    const firstError = Array.isArray(errorMessages[0]) 
+                        ? errorMessages[0][0] 
+                        : errorMessages[0];
+                    toast.error('Validation Error', {
+                        description: firstError || 'Please check the form for errors.',
+                    });
+                }
+            },
+            onSuccess: () => {
+                toast.success('Question created successfully!');
+            },
+        });
     };
 
     return (
@@ -121,6 +163,7 @@ export default function CreateQuestion({ subjects }: Props) {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
+                        {/* General error message */}
                         {(errors as any).error && (
                             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
                                 <p className="text-sm text-red-600 dark:text-red-400">
@@ -128,7 +171,27 @@ export default function CreateQuestion({ subjects }: Props) {
                                 </p>
                             </div>
                         )}
-                        <Form onSubmit={submit} className="space-y-6">
+                        
+                        {/* Show validation errors summary */}
+                        {Object.keys(errors).length > 0 && !(errors as any).error && (
+                            <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
+                                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                                    Please fix the following errors:
+                                </p>
+                                <ul className="list-disc list-inside text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                                    {Object.entries(errors).map(([key, value]) => {
+                                        const errorMessage = Array.isArray(value) ? value[0] : value;
+                                        return (
+                                            <li key={key}>
+                                                <span className="font-medium">{key}:</span> {errorMessage}
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
+                        )}
+                        
+                        <form onSubmit={submit} className="space-y-6">
                             <div className="grid gap-2">
                                 <Label htmlFor="subject_id">Subject *</Label>
                                 <Select
@@ -451,7 +514,7 @@ export default function CreateQuestion({ subjects }: Props) {
                                     </a>
                                 </Button>
                             </div>
-                        </Form>
+                        </form>
                     </CardContent>
                 </Card>
             </div>

@@ -72,21 +72,37 @@ class QuestionController extends Controller
             'data' => $request->all(),
         ]);
 
-        $validated = $request->validate([
+        // First validate question_type to determine conditional rules
+        $request->validate([
+            'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
+        ]);
+
+        // Base validation rules
+        $rules = [
             'subject_id' => 'required|exists:subjects,id',
             'question_text' => 'required|string',
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
-            'expected_answer' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'points' => 'required|integer|min:1',
             'order' => 'required|integer|min:1',
-            'answers' => 'nullable|array|min:2',
-            'answers.*.answer_text' => 'required_with:answers|string',
-            'answers.*.is_correct' => 'required_with:answers|boolean',
-            'answers.*.order' => 'required_with:answers|string|in:A,B,C,D,E',
-        ]);
+        ];
+
+        // Conditional validation based on question type
+        if ($request->question_type === 'multiple_choice') {
+            $rules['answers'] = 'required|array|min:2';
+            $rules['answers.*.answer_text'] = 'required|string';
+            $rules['answers.*.is_correct'] = 'required|boolean';
+            $rules['answers.*.order'] = 'required|string|in:A,B,C,D,E';
+        } else {
+            // For non-multiple_choice questions, expected_answer is required and answers should not be present
+            $rules['expected_answer'] = 'required|string';
+            // Explicitly prohibit answers from being present for non-multiple_choice
+            $rules['answers'] = 'prohibited';
+        }
+
+        $validated = $request->validate($rules);
 
         try {
             // Conditional validation
@@ -188,22 +204,38 @@ class QuestionController extends Controller
      */
     public function update(Request $request, Question $question)
     {
-        $validated = $request->validate([
+        // First validate question_type to determine conditional rules
+        $request->validate([
+            'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
+        ]);
+
+        // Base validation rules
+        $rules = [
             'subject_id' => 'required|exists:subjects,id',
             'question_text' => 'required|string',
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
-            'expected_answer' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'points' => 'required|integer|min:1',
             'order' => 'required|integer|min:1',
-            'answers' => 'nullable|array|min:2',
-            'answers.*.id' => 'nullable|exists:answers,id',
-            'answers.*.answer_text' => 'required_with:answers|string',
-            'answers.*.is_correct' => 'required_with:answers|boolean',
-            'answers.*.order' => 'required_with:answers|string|in:A,B,C,D,E',
-        ]);
+        ];
+
+        // Conditional validation based on question type
+        if ($request->question_type === 'multiple_choice') {
+            $rules['answers'] = 'required|array|min:2';
+            $rules['answers.*.id'] = 'nullable|exists:answers,id';
+            $rules['answers.*.answer_text'] = 'required|string';
+            $rules['answers.*.is_correct'] = 'required|boolean';
+            $rules['answers.*.order'] = 'required|string|in:A,B,C,D,E';
+        } else {
+            // For non-multiple_choice questions, expected_answer is required and answers should not be present
+            $rules['expected_answer'] = 'required|string';
+            // Explicitly prohibit answers from being present for non-multiple_choice
+            $rules['answers'] = 'prohibited';
+        }
+
+        $validated = $request->validate($rules);
 
         // Conditional validation
         if ($validated['question_type'] === 'multiple_choice') {
