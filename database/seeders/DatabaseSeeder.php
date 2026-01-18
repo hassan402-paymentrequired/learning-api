@@ -16,18 +16,18 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         User::firstOrCreate(
-            ['email' => 'balogun@initsng.com'],
+            ['email' => 'admin@stepra.com'],
             [
-                'name' => 'Test User',
-                'password' => bcrypt('1234567890'),
+                'name' => 'Admin',
+                'password' => bcrypt('admin@stepra'),
                 'email_verified_at' => now(),
             ]
         );
 
         // $this->call([
-        //     SubscriptionPlanSeeder::class, 
+        //     SubscriptionPlanSeeder::class,
         //     SubjectSeeder::class,
-        //     ExamSeeder::class,   
+        //     ExamSeeder::class,
         // ]);
     }
 }
