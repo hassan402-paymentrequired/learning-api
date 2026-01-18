@@ -50,8 +50,8 @@
         <section style="max-width: 42rem; background-color: #fff;">
             <header>
                 <a href="#">
-                    <img src="https://www.tailwindtap.com/_next/static/media/nav-logo.371aaafb.svg"
-                        alt="tailwindtaplogo" />
+                    <img src="{{ asset('logo/favicon-32x32.png') }}"
+                        alt="Stepra logo" />
                 </a>
             </header>
 

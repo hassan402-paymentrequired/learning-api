@@ -43,13 +43,17 @@ Route::post('/password-reset/resend-otp', [PasswordResetController::class, 'rese
 Route::get('/subscriptions/callback', [SubscriptionController::class, 'callback']);
 Route::get('/subscriptions/cancel', [SubscriptionController::class, 'cancel']);
 
-// Protected routes
+// Protected routes - allow /me and /logout without email verification (needed for verification flow)
 Route::middleware('auth:api')->group(function () {
-    // Auth routes
+    // Auth routes (accessible even without email verification)
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
 
+});
+
+// Protected routes requiring email verification
+Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class])->group(function () {
     // Exam routes
     Route::get('/exams', [ExamController::class, 'index']);
     Route::get('/exams/subjects', [ExamController::class, 'subjects']);

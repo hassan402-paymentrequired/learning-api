@@ -28,7 +28,7 @@ class PasswordResetController extends Controller
 
         // Find user by email to send notification
         $user = User::where('email', $request->email)->first();
-        
+
         if ($user) {
             // Send OTP via notification (queued)
             try {
@@ -123,28 +123,10 @@ class PasswordResetController extends Controller
     {
         $request->validate([
             'email' => 'required|email|exists:users,email',
-            'otp' => 'required|string|size:6',
             'password' => 'required|string|min:8|confirmed',
         ]);
 
         $user = User::where('email', $request->email)->first();
-
-        // Verify OTP
-        $otp = Otp::where('email', $request->email)
-            ->where('type', 'password_reset')
-            ->where('otp', $request->otp)
-            ->where('is_used', false)
-            ->first();
-
-        if (!$otp || $otp->isExpired()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid or expired reset code. Please request a new one.',
-            ], 400);
-        }
-
-        // Mark OTP as used
-        $otp->update(['is_used' => true]);
 
         // Update password
         $user->update([
