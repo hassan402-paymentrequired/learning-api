@@ -87,6 +87,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     // Referral routes
     Route::get('/referrals', [ReferralController::class, 'index']);
     Route::get('/referrals/code', [ReferralController::class, 'code']);
+    Route::get('/referrals/balance', [ReferralController::class, 'balance']);
 
     // Leaderboard routes
     Route::get('/leaderboard', [LeaderboardController::class, 'index']);

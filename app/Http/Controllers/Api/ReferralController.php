@@ -92,4 +92,24 @@ class ReferralController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Get user's credit balance from referrals.
+     */
+    public function balance(Request $request)
+    {
+        $user = auth()->user();
+
+        // Calculate total credit balance from rewarded referrals
+        $creditBalance = Referral::where('referrer_id', $user->id)
+            ->where('status', 'rewarded')
+            ->sum('referrer_reward_amount');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'credit_balance' => (float) $creditBalance,
+            ],
+        ]);
+    }
 }

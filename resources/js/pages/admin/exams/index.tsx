@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
 import { BookOpen, Plus, Search, Power, PowerOff, Trash2, Edit } from 'lucide-react';
 import { useState } from 'react';

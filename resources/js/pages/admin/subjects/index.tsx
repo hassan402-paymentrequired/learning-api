@@ -4,13 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { BookOpen, Plus, Search, Power, PowerOff, Trash2, ArrowLeft, Edit } from 'lucide-react';
+import { Plus, Search, Power, PowerOff, Trash2, Edit, FileQuestion, Eye, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 import { Link, router } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
 interface Subject {
@@ -22,6 +22,7 @@ interface Subject {
     is_active: boolean;
     order: number;
     created_at: string;
+    questions_count: number;
 }
 
 interface Props {
@@ -124,12 +125,6 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                        <Button asChild variant="outline" size="sm">
-                            <Link href={admin.settings.index().url}>
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Back to Settings
-                            </Link>
-                        </Button>
                         <div>
                             <h1 className="text-2xl font-bold">Subjects</h1>
                             <p className="text-muted-foreground">Manage subjects for practice exams</p>
@@ -233,7 +228,6 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                                                 {subject.exam_types && subject.exam_types.length > 0
                                                     ? subject.exam_types.join(', ')
                                                     : 'No exam types'}
-                                                {subject.order !== null && ` • Order: ${subject.order}`}
                                             </CardDescription>
                                         </div>
                                     </div>
@@ -256,48 +250,57 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                                         </div>
                                     )}
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <BookOpen className="h-4 w-4" />
-                                        <span>Order: {subject.order}</span>
+                                        <FileQuestion className="h-4 w-4" />
+                                        <span>{subject.questions_count} question{subject.questions_count !== 1 ? 's' : ''}</span>
                                     </div>
-                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                                    <div className="flex gap-2 pt-2">
                                         <Button
-                                            variant="outline"
+                                            variant="default"
                                             size="sm"
                                             asChild
                                             className="flex-1"
                                         >
-                                            <Link href={admin.subjects.edit(subject.id).url}>
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Edit
+                                            <Link href={admin.subjects.show({ subject: subject.id }).url}>
+                                                <Eye className="mr-2 h-4 w-4" />
+                                                View Questions
                                             </Link>
                                         </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleToggleActive(subject.id)}
-                                            className="flex-1"
-                                        >
-                                            {subject.is_active ? (
-                                                <>
-                                                    <PowerOff className="mr-2 h-4 w-4" />
-                                                    Deactivate
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Power className="mr-2 h-4 w-4" />
-                                                    Activate
-                                                </>
-                                            )}
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleDelete(subject.id, subject.name)}
-                                            className="flex-1"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete
-                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="outline" size="sm" className="px-2">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={admin.subjects.edit(subject.id).url}>
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        Edit
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleToggleActive(subject.id)}>
+                                                    {subject.is_active ? (
+                                                        <>
+                                                            <PowerOff className="mr-2 h-4 w-4" />
+                                                            Deactivate
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Power className="mr-2 h-4 w-4" />
+                                                            Activate
+                                                        </>
+                                                    )}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem 
+                                                    onClick={() => handleDelete(subject.id, subject.name)}
+                                                    variant="destructive"
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 </div>
                             </CardContent>

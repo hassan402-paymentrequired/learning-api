@@ -16,7 +16,6 @@ interface Subject {
     description: string | null;
     exam_types: string[] | null;
     is_active: boolean;
-    order: number;
 }
 
 interface Props {
@@ -24,19 +23,18 @@ interface Props {
 }
 
 export default function EditSubject({ subject }: Props) {
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, patch, processing, errors } = useForm({
         name: subject.name,
         description: subject.description || '',
         exam_types: (subject.exam_types && Array.isArray(subject.exam_types)) 
             ? subject.exam_types 
             : (subject.exam_types ? [subject.exam_types] : []),
         is_active: subject.is_active,
-        order: subject.order,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(admin.subjects.update(subject.id).url);
+        patch(admin.subjects.update(subject.id).url);
     };
 
     return (
@@ -90,23 +88,6 @@ export default function EditSubject({ subject }: Props) {
                                 />
                                 {errors.description && (
                                     <p className="text-sm text-red-500">{errors.description}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="order">Display Order</Label>
-                                <Input
-                                    id="order"
-                                    type="number"
-                                    value={data.order}
-                                    onChange={(e) => setData('order', parseInt(e.target.value) || 0)}
-                                    min="0"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Lower numbers appear first in lists
-                                </p>
-                                {errors.order && (
-                                    <p className="text-sm text-red-500">{errors.order}</p>
                                 )}
                             </div>
 

@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
-import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
 import { Search, User as UserIcon, Mail, Calendar, Eye, Edit, Trash2, Shield, ShieldOff } from 'lucide-react';
 import { useState } from 'react';

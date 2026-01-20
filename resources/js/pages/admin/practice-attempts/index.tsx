@@ -4,12 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { router } from '@inertiajs/react';
-import { Head } from '@inertiajs/react';
 import { Search, Eye, Calendar, User, BookOpen, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import admin from '@/routes/admin';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, Head } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
@@ -66,15 +63,7 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
         }, {
             preserveState: true,
             preserveScroll: true,
-        });
-    };
-
-    const handleSelectAll = () => {
-        if (selectedAttempts.length === attempts.data.length) {
-            setSelectedAttempts([]);
-        } else {
-            setSelectedAttempts(attempts.data.map(a => a.id));
-        }
+        }); 
     };
 
     const handleSelectAttempt = (attemptId: number) => {

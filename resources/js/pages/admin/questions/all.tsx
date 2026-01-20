@@ -3,12 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { router } from '@inertiajs/react';
-import { Head } from '@inertiajs/react';
+import { router, Link,Head } from '@inertiajs/react';
 import { Search, FileQuestion, BookOpen } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Link } from '@inertiajs/react';
 
 interface Question {
     id: number;

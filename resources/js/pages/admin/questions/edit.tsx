@@ -50,7 +50,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function EditQuestion({ question, subjects }: Props) {
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, patch, processing, errors } = useForm({
         subject_id: question.subject_id?.toString() || '',
         question_text: question.question_text,
         question_type: question.question_type,
@@ -98,7 +98,7 @@ export default function EditQuestion({ question, subjects }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(admin.questions.update({ question: question.id }).url);
+        patch(admin.questions.update({ question: question.id }).url);
     };
 
     return (

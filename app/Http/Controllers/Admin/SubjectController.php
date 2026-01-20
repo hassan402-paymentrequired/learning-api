@@ -14,7 +14,7 @@ class SubjectController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Subject::query();
+        $query = Subject::withCount('questions');
 
         // Search
         if ($request->has('search')) {
@@ -26,11 +26,29 @@ class SubjectController extends Controller
             $query->where('is_active', $request->is_active === 'true');
         }
 
-        $subjects = $query->orderBy('order')->orderBy('name')->paginate(15);
+        $subjects = $query->orderBy('name')->paginate(15);
 
         return Inertia::render('admin/subjects/index', [
             'subjects' => $subjects,
             'filters' => $request->only(['search', 'is_active']),
+        ]);
+    }
+
+    /**
+     * Show questions for a specific subject.
+     */
+    public function show(Subject $subject)
+    {
+        $subject->loadCount('questions');
+        
+        $questions = \App\Models\Question::where('subject_id', $subject->id)
+            ->with(['subject', 'exam', 'answers'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+
+        return Inertia::render('admin/subjects/show', [
+            'subject' => $subject,
+            'questions' => $questions,
         ]);
     }
 
@@ -53,7 +71,6 @@ class SubjectController extends Controller
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'is_active' => 'boolean',
-            'order' => 'nullable|integer|min:0',
         ]);
 
         $subject = Subject::create($validated);
@@ -83,7 +100,6 @@ class SubjectController extends Controller
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'is_active' => 'boolean',
-            'order' => 'nullable|integer|min:0',
         ]);
 
         $subject->update($validated);

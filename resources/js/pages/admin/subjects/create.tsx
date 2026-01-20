@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link,  useForm } from '@inertiajs/react';
 import { ArrowLeft, Save } from 'lucide-react';
 import admin from '@/routes/admin';
 
@@ -15,7 +15,6 @@ export default function CreateSubject() {
         description: '',
         exam_types: [] as string[],
         is_active: true,
-        order: 0,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -74,23 +73,6 @@ export default function CreateSubject() {
                                 />
                                 {errors.description && (
                                     <p className="text-sm text-red-500">{errors.description}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="order">Display Order</Label>
-                                <Input
-                                    id="order"
-                                    type="number"
-                                    value={data.order}
-                                    onChange={(e) => setData('order', parseInt(e.target.value) || 0)}
-                                    min="0"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Lower numbers appear first in lists
-                                </p>
-                                {errors.order && (
-                                    <p className="text-sm text-red-500">{errors.order}</p>
                                 )}
                             </div>
 
