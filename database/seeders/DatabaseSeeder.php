@@ -21,13 +21,8 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Admin',
                 'password' => bcrypt('admin@stepra'),
                 'email_verified_at' => now(),
+                'is_admin' => true,
             ]
         );
-
-        // $this->call([
-        //     SubscriptionPlanSeeder::class,
-        //     SubjectSeeder::class,
-        //     ExamSeeder::class,
-        // ]);
     }
 }

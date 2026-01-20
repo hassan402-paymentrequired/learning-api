@@ -19,14 +19,12 @@ class Question extends Model
         'question_type',
         'explanation',
         'expected_answer',
-        'points',
-        'order',
+        'is_active',
     ];
 
     protected $casts = [
-        'points' => 'integer',
-        'order' => 'integer',
         'exam_types' => 'array',
+        'is_active' => 'boolean',
     ];
 
     /**

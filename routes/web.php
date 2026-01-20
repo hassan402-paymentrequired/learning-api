@@ -13,18 +13,23 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
-    // Admin routes
-    Route::prefix('admin')->name('admin.')->group(function () {
+    // Admin routes - require admin access
+    Route::middleware([\App\Http\Middleware\EnsureUserIsAdmin::class])->prefix('admin')->name('admin.')->group(function () {
         // Users routes
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [App\Http\Controllers\Admin\UserController::class, 'index'])->name('index');
             Route::get('/{user}', [App\Http\Controllers\Admin\UserController::class, 'show'])->name('show');
+            Route::get('/{user}/edit', [App\Http\Controllers\Admin\UserController::class, 'edit'])->name('edit');
+            Route::patch('/{user}', [App\Http\Controllers\Admin\UserController::class, 'update'])->name('update');
+            Route::post('/{user}/toggle-admin', [App\Http\Controllers\Admin\UserController::class, 'toggleAdmin'])->name('toggle-admin');
+            Route::delete('/{user}', [App\Http\Controllers\Admin\UserController::class, 'destroy'])->name('destroy');
         });
 
         // Practice Attempts routes
         Route::prefix('practice-attempts')->name('practice-attempts.')->group(function () {
             Route::get('/', [App\Http\Controllers\Admin\PracticeAttemptController::class, 'index'])->name('index');
             Route::get('/{practiceAttempt}', [App\Http\Controllers\Admin\PracticeAttemptController::class, 'show'])->name('show');
+            Route::delete('/{practiceAttempt}', [App\Http\Controllers\Admin\PracticeAttemptController::class, 'destroy'])->name('destroy');
         });
 
         // Exams routes
@@ -34,8 +39,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [App\Http\Controllers\Admin\ExamController::class, 'store'])->name('store');
             Route::get('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'show'])->name('show');
             Route::get('/{exam}/edit', [App\Http\Controllers\Admin\ExamController::class, 'edit'])->name('edit');
-            // Route::put('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'update'])->name('update');
             Route::patch('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'update'])->name('update');
+            Route::post('/{exam}/toggle-active', [App\Http\Controllers\Admin\ExamController::class, 'toggleActive'])->name('toggle-active');
             Route::delete('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'destroy'])->name('destroy');
             Route::post('/{exam}/duplicate', [App\Http\Controllers\Admin\ExamController::class, 'duplicate'])->name('duplicate');
             Route::post('/bulk-update', [App\Http\Controllers\Admin\ExamController::class, 'bulkUpdate'])->name('bulk-update');
@@ -48,8 +53,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [App\Http\Controllers\Admin\QuestionController::class, 'store'])->name('store');
             Route::get('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'show'])->name('show');
             Route::get('/{question}/edit', [App\Http\Controllers\Admin\QuestionController::class, 'edit'])->name('edit');
-            // Route::put('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'update'])->name('update');
             Route::patch('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'update'])->name('update');
+            Route::post('/{question}/toggle-active', [App\Http\Controllers\Admin\QuestionController::class, 'toggleActive'])->name('toggle-active');
             Route::delete('/{question}', [App\Http\Controllers\Admin\QuestionController::class, 'destroy'])->name('destroy');
             Route::get('/sample/download', [App\Http\Controllers\Admin\QuestionController::class, 'downloadSample'])->name('sample');
             Route::post('/bulk-upload', [App\Http\Controllers\Admin\QuestionController::class, 'bulkUpload'])->name('bulk-upload');
@@ -62,8 +67,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [App\Http\Controllers\Admin\SubjectController::class, 'store'])->name('store');
             Route::get('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'show'])->name('show');
             Route::get('/{subject}/edit', [App\Http\Controllers\Admin\SubjectController::class, 'edit'])->name('edit');
-            // Route::put('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'update'])->name('update');
             Route::patch('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'update'])->name('update');
+            Route::post('/{subject}/toggle-active', [App\Http\Controllers\Admin\SubjectController::class, 'toggleActive'])->name('toggle-active');
+            Route::post('/bulk-update', [App\Http\Controllers\Admin\SubjectController::class, 'bulkUpdate'])->name('bulk-update');
             Route::delete('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'destroy'])->name('destroy');
         });
 

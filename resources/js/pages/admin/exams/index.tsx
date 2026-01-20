@@ -6,9 +6,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { BookOpen, Plus, Search, Power, PowerOff } from 'lucide-react';
+import { BookOpen, Plus, Search, Power, PowerOff, Trash2, Edit } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
+import { Link, router } from '@inertiajs/react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 interface Exam {
     id: number;
@@ -41,6 +44,8 @@ export default function ExamsIndex({ exams, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [examType, setExamType] = useState(filters.exam_type || '');
     const [selectedExams, setSelectedExams] = useState<number[]>([]);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [examToDelete, setExamToDelete] = useState<number | null>(null);
 
     const handleFilter = () => {
         router.get(admin.exams.index().url, {
@@ -70,7 +75,7 @@ export default function ExamsIndex({ exams, filters }: Props) {
 
     const handleBulkAction = (action: 'activate' | 'deactivate') => {
         if (selectedExams.length === 0) {
-            alert('Please select at least one exam.');
+            toast.error('Please select at least one exam.');
             return;
         }
 
@@ -79,8 +84,49 @@ export default function ExamsIndex({ exams, filters }: Props) {
                 exam_ids: selectedExams,
                 action: action,
             }, {
+                preserveState: true,
+                preserveScroll: true,
                 onSuccess: () => {
+                    toast.success(`${selectedExams.length} exam(s) ${action}d successfully`);
                     setSelectedExams([]);
+                },
+                onError: () => {
+                    toast.error('Failed to update exams');
+                },
+            });
+        }
+    };
+
+    const handleToggleActive = (examId: number) => {
+        router.post(`/admin/exams/${examId}/toggle-active`, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Exam status updated successfully');
+            },
+            onError: () => {
+                toast.error('Failed to update exam status');
+            },
+        });
+    };
+
+    const handleDelete = (examId: number) => {
+        setExamToDelete(examId);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (examToDelete) {
+            router.delete(admin.exams.destroy({ exam: examToDelete }).url, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Exam deleted successfully');
+                    setDeleteDialogOpen(false);
+                    setExamToDelete(null);
+                },
+                onError: () => {
+                    toast.error('Failed to delete exam');
                 },
             });
         }
@@ -90,16 +136,16 @@ export default function ExamsIndex({ exams, filters }: Props) {
         <AppLayout>
             <Head title="Exams" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold">Exams</h1>
                         <p className="text-muted-foreground">Manage practice exams and past questions</p>
                     </div>
                     <Button asChild>
-                        <a href={admin.exams.create().url}>
+                        <Link href={admin.exams.create().url}>
                             <Plus className="mr-2 h-4 w-4" />
                             Create Exam
-                        </a>
+                        </Link>
                     </Button>
                 </div>
 
@@ -147,7 +193,7 @@ export default function ExamsIndex({ exams, filters }: Props) {
                         <CardDescription>Filter exams by search, type, or exam type</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex gap-4">
+                        <div className="flex flex-col lg:flex-row gap-4">
                             <div className="flex-1">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -160,18 +206,20 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                     />
                                 </div>
                             </div>
-                            <Select value={examType || 'all'} onValueChange={setExamType}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All Exam Types" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Exam Types</SelectItem>
-                                    <SelectItem value="JAMB">JAMB</SelectItem>
-                                    <SelectItem value="UNILAG">UNILAG</SelectItem>
-                                    <SelectItem value="GENERAL">GENERAL</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Button onClick={handleFilter}>Filter</Button>
+                            <div className="flex flex-col sm:flex-row gap-2 flex-1 lg:flex-initial">
+                                <Select value={examType || 'all'} onValueChange={setExamType}>
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="All Exam Types" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Exam Types</SelectItem>
+                                        <SelectItem value="JAMB">JAMB</SelectItem>
+                                        <SelectItem value="UNILAG">UNILAG</SelectItem>
+                                        <SelectItem value="GENERAL">GENERAL</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button onClick={handleFilter} className="w-full sm:w-auto">Filter</Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -216,14 +264,14 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                             Subject: {exam.subject}
                                         </div>
                                     )}
-                                    <div className="flex gap-2 pt-2">
+                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             asChild
                                             className="flex-1"
                                         >
-                                            <a href={admin.exams.show(exam.id).url}>View</a>
+                                            <Link href={admin.exams.show(exam.id).url}>View</Link>
                                         </Button>
                                         <Button
                                             variant="outline"
@@ -231,7 +279,37 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                             asChild
                                             className="flex-1"
                                         >
-                                            <a href={admin.exams.edit( exam.id).url}>Edit</a>
+                                            <Link href={admin.exams.edit(exam.id).url}>
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </Link>
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleToggleActive(exam.id)}
+                                            className="flex-1"
+                                        >
+                                            {exam.is_active ? (
+                                                <>
+                                                    <PowerOff className="mr-2 h-4 w-4" />
+                                                    Deactivate
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Power className="mr-2 h-4 w-4" />
+                                                    Activate
+                                                </>
+                                            )}
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => handleDelete(exam.id)}
+                                            className="flex-1"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete
                                         </Button>
                                     </div>
                                 </div>
@@ -269,6 +347,26 @@ export default function ExamsIndex({ exams, filters }: Props) {
                         </Button>
                     </div>
                 )}
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete Exam</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete this exam? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={confirmDelete}>
+                                Delete
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

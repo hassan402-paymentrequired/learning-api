@@ -24,18 +24,23 @@ class QuestionController extends Controller
         }
 
         // Filter by subject
-        if ($request->has('subject_id')) {
+        if ($request->has('subject_id') && $request->subject_id !== 'all') {
             $query->where('subject_id', $request->subject_id);
         }
 
         // Filter by exam type (using exam_types JSON column)
-        if ($request->has('exam_type')) {
+        if ($request->has('exam_type') && $request->exam_type !== 'all') {
             $query->whereJsonContains('exam_types', $request->exam_type);
         }
 
         // Filter by question type
-        if ($request->has('question_type')) {
+        if ($request->has('question_type') && $request->question_type !== 'all') {
             $query->where('question_type', $request->question_type);
+        }
+
+        // Filter by active status
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->is_active);
         }
 
         $questions = $query->orderBy('created_at', 'desc')->paginate(20);
@@ -85,8 +90,6 @@ class QuestionController extends Controller
             'explanation' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
-            'points' => 'required|integer|min:1',
-            'order' => 'required|integer|min:1',
         ];
 
         // Conditional validation based on question type
@@ -142,8 +145,7 @@ class QuestionController extends Controller
                 'explanation' => $validated['explanation'] ?? null,
                 'expected_answer' => $validated['expected_answer'] ?? null,
                 'exam_types' => $validated['exam_types'],
-                'points' => $validated['points'],
-                'order' => $validated['order'],
+                'is_active' => true, // New questions are active by default
             ]);
 
             Log::info('Question created successfully', [
@@ -217,8 +219,6 @@ class QuestionController extends Controller
             'explanation' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
-            'points' => 'required|integer|min:1',
-            'order' => 'required|integer|min:1',
         ];
 
         // Conditional validation based on question type
@@ -274,8 +274,6 @@ class QuestionController extends Controller
             'explanation' => $validated['explanation'] ?? null,
             'expected_answer' => $validated['expected_answer'] ?? null,
             'exam_types' => $validated['exam_types'],
-            'points' => $validated['points'],
-            'order' => $validated['order'],
         ]);
 
         if ($validated['question_type'] === 'multiple_choice') {
@@ -314,7 +312,20 @@ class QuestionController extends Controller
     }
 
     /**
-     * Remove the specified question (standalone).
+     * Toggle active status of a question.
+     */
+    public function toggleActive(Request $request, Question $question)
+    {
+        $question->update([
+            'is_active' => !$question->is_active,
+        ]);
+
+        return redirect()->route('admin.questions.index')
+            ->with('success', $question->is_active ? 'Question activated successfully.' : 'Question deactivated successfully.');
+    }
+
+    /**
+     * Remove the specified question from storage.
      */
     public function destroy(Question $question)
     {
@@ -360,8 +371,6 @@ class QuestionController extends Controller
                     'Expected Answer',
                     'Alternative Answers (comma-separated, optional)',
                     'Explanation (Optional)',
-                    'Points',
-                    'Order',
                     'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
                 ]);
 
@@ -372,8 +381,6 @@ class QuestionController extends Controller
                     'Abuja',
                     'abuja,ABUJA',
                     'Abuja became the capital of Nigeria in 1991, replacing Lagos.',
-                    '1',
-                    '1',
                     'JAMB,DLI'
                 ]);
             } else if ($questionType === 'true_false') {
@@ -383,8 +390,6 @@ class QuestionController extends Controller
                     'Question Text',
                     'Expected Answer (true/false)',
                     'Explanation (Optional)',
-                    'Points',
-                    'Order',
                     'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
                 ]);
 
@@ -394,8 +399,6 @@ class QuestionController extends Controller
                     'The sum of 2 and 2 equals 4.',
                     'true',
                     'This is a basic arithmetic fact: 2 + 2 = 4.',
-                    '1',
-                    '1',
                     'JAMB,DLI'
                 ]);
             } else {
@@ -410,8 +413,6 @@ class QuestionController extends Controller
                     'Answer E (Optional)',
                     'Correct Answer (A/B/C/D/E)',
                     'Explanation (Optional)',
-                    'Points',
-                    'Order',
                     'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
                 ]);
 
@@ -426,8 +427,6 @@ class QuestionController extends Controller
                     '',
                     'B',
                     'Basic addition: 2 + 2 = 4',
-                    '1',
-                    '1',
                     'JAMB,DLI'
                 ]);
             }
@@ -498,11 +497,11 @@ class QuestionController extends Controller
 
             // Parse exam types (column index depends on question type)
             if ($questionType === 'multiple_choice') {
-                $examTypesColumn = 11;
+                $examTypesColumn = 9;
             } else if ($questionType === 'true_false') {
-                $examTypesColumn = 6;
+                $examTypesColumn = 4;
             } else {
-                $examTypesColumn = 7; // text_input, numeric_input
+                $examTypesColumn = 5; // text_input, numeric_input
             }
             $examTypesString = trim($row[$examTypesColumn] ?? '');
             $examTypes = [];
@@ -518,28 +517,16 @@ class QuestionController extends Controller
                 continue;
             }
 
-            // Get explanation, points, and order columns (depends on question type)
+            // Get explanation column (depends on question type)
             if ($questionType === 'multiple_choice') {
                 $explanationColumn = 8;
-                $pointsColumn = 9;
-                $orderColumn = 10;
             } else if ($questionType === 'true_false') {
                 $explanationColumn = 3;
-                $pointsColumn = 4;
-                $orderColumn = 5;
             } else {
                 $explanationColumn = 4; // text_input, numeric_input
-                $pointsColumn = 5;
-                $orderColumn = 6;
             }
 
             $explanation = trim($row[$explanationColumn] ?? '');
-            $points = intval($row[$pointsColumn] ?? 1);
-            $order = intval($row[$orderColumn] ?? 1);
-
-            if ($points < 1) {
-                $points = 1;
-            }
 
             try {
                 if ($questionType === 'text_input' || $questionType === 'numeric_input') {
@@ -568,8 +555,7 @@ class QuestionController extends Controller
                         'expected_answer' => $expectedAnswerString,
                         'explanation' => $explanation ?: null,
                         'exam_types' => $examTypes,
-                        'points' => $points,
-                        'order' => $order,
+                        'is_active' => true,
                     ]);
                 } else if ($questionType === 'true_false') {
                     // Handle true/false questions
@@ -593,8 +579,7 @@ class QuestionController extends Controller
                         'expected_answer' => $expectedAnswer,
                         'explanation' => $explanation ?: null,
                         'exam_types' => $examTypes,
-                        'points' => $points,
-                        'order' => $order,
+                        'is_active' => true,
                     ]);
                 } else {
                     // Handle multiple choice questions
@@ -632,8 +617,7 @@ class QuestionController extends Controller
                         'question_type' => 'multiple_choice',
                         'explanation' => $explanation ?: null,
                         'exam_types' => $examTypes,
-                        'points' => $points,
-                        'order' => $order,
+                        'is_active' => true,
                     ]);
 
                     // Create answers

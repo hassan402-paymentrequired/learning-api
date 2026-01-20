@@ -53,8 +53,6 @@ export default function CreateQuestion({ subjects }: Props) {
         explanation: '',
         expected_answer: '',
         exam_types: [] as string[],
-        points: 1,
-        order: 1,
         answers: [
             { answer_text: '', is_correct: false, order: 'A' },
             { answer_text: '', is_correct: false, order: 'B' },
@@ -398,46 +396,6 @@ export default function CreateQuestion({ subjects }: Props) {
                                     </p>
                                 </div>
                             )}
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="points">Points *</Label>
-                                    <Input
-                                        id="points"
-                                        type="number"
-                                        min="1"
-                                        value={data.points}
-                                        onChange={(e) =>
-                                            setData(
-                                                'points',
-                                                parseInt(e.target.value) || 1,
-                                            )
-                                        }
-                                        required
-                                    />
-                                    <InputError message={errors.points} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="order">
-                                        Question Order *
-                                    </Label>
-                                    <Input
-                                        id="order"
-                                        type="number"
-                                        min="1"
-                                        value={data.order}
-                                        onChange={(e) =>
-                                            setData(
-                                                'order',
-                                                parseInt(e.target.value) || 1,
-                                            )
-                                        }
-                                        required
-                                    />
-                                    <InputError message={errors.order} />
-                                </div>
-                            </div>
 
                             <div className="grid gap-2">
                                 <Label htmlFor="explanation">Explanation</Label>

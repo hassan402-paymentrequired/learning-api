@@ -31,7 +31,7 @@ class Exam extends Model
      */
     public function questions(): HasMany
     {
-        return $this->hasMany(Question::class)->orderBy('order');
+        return $this->hasMany(Question::class);
     }
 
     /**

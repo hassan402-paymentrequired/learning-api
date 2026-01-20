@@ -6,10 +6,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { Search, Eye, Calendar, User, BookOpen, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Search, Eye, Calendar, User, BookOpen, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 interface Attempt {
     id: number;
@@ -53,6 +55,8 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
     const [dateFrom, setDateFrom] = useState(filters.date_from || '');
     const [dateTo, setDateTo] = useState(filters.date_to || '');
     const [selectedAttempts, setSelectedAttempts] = useState<number[]>([]);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [attemptToDelete, setAttemptToDelete] = useState<number | null>(null);
 
     const handleFilter = () => {
         router.get('/admin/practice-attempts', {
@@ -108,6 +112,28 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
         return ((correct / total) * 100).toFixed(1);
     };
 
+    const handleDelete = (attemptId: number) => {
+        setAttemptToDelete(attemptId);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (attemptToDelete) {
+            router.delete(`/admin/practice-attempts/${attemptToDelete}`, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Practice attempt deleted successfully');
+                    setDeleteDialogOpen(false);
+                    setAttemptToDelete(null);
+                },
+                onError: () => {
+                    toast.error('Failed to delete practice attempt');
+                },
+            });
+        }
+    };
+
     return (
         <AppLayout>
             <Head title="Practice Attempts" />
@@ -145,7 +171,7 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
                         <CardDescription>Filter practice attempts</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex gap-4">
+                        <div className="flex flex-col lg:flex-row gap-4">
                             <div className="flex-1">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -156,32 +182,34 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
                                     />
                                 </div>
                             </div>
-                            <Select value={status || 'all'} onValueChange={setStatus}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All statuses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All statuses</SelectItem>
-                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                    <SelectItem value="completed">Completed</SelectItem>
-                                    <SelectItem value="abandoned">Abandoned</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Input
-                                type="date"
-                                value={dateFrom}
-                                onChange={(e) => setDateFrom(e.target.value)}
-                                placeholder="Date From"
-                                className="w-[180px]"
-                            />
-                            <Input
-                                type="date"
-                                value={dateTo}
-                                onChange={(e) => setDateTo(e.target.value)}
-                                placeholder="Date To"
-                                className="w-[180px]"
-                            />
-                            <Button onClick={handleFilter}>Filter</Button>
+                            <div className="flex flex-col sm:flex-row gap-2 flex-1 lg:flex-initial">
+                                <Select value={status || 'all'} onValueChange={setStatus}>
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="All statuses" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All statuses</SelectItem>
+                                        <SelectItem value="in_progress">In Progress</SelectItem>
+                                        <SelectItem value="completed">Completed</SelectItem>
+                                        <SelectItem value="abandoned">Abandoned</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Input
+                                    type="date"
+                                    value={dateFrom}
+                                    onChange={(e) => setDateFrom(e.target.value)}
+                                    placeholder="Date From"
+                                    className="w-full sm:w-[180px]"
+                                />
+                                <Input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={(e) => setDateTo(e.target.value)}
+                                    placeholder="Date To"
+                                    className="w-full sm:w-[180px]"
+                                />
+                                <Button onClick={handleFilter} className="w-full sm:w-auto">Filter</Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -233,7 +261,7 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
                                             </span>
                                         </div>
                                     )}
-                                    <div className="flex gap-2 pt-2">
+                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -244,6 +272,15 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
                                                 <Eye className="mr-2 h-4 w-4" />
                                                 View
                                             </Link>
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => handleDelete(attempt.id)}
+                                            className="flex-1"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete
                                         </Button>
                                     </div>
                                 </div>
@@ -281,6 +318,26 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
                         </Button>
                     </div>
                 )}
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete Practice Attempt</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete this practice attempt? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={confirmDelete}>
+                                Delete
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

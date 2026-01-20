@@ -5,21 +5,20 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { router, useForm, Link } from '@inertiajs/react';
-import { Head } from '@inertiajs/react';
-import { Search, FileQuestion, Plus, Upload, Download, Edit } from 'lucide-react';
+import { router, useForm, Link, Head } from '@inertiajs/react';
+import { Search, FileQuestion, Plus, Upload, Download, Edit, Trash2, Power, PowerOff } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 interface Question {
     id: number;
     question_text: string;
     question_type: 'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false';
-    points: number;
-    order: number;
     exam_types: string[];
+    is_active: boolean;
     subject: {
         id: number;
         name: string;
@@ -62,6 +61,8 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
     const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
     const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
     const [selectedQuestionType, setSelectedQuestionType] = useState<'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false'>('multiple_choice');
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [questionToDelete, setQuestionToDelete] = useState<number | null>(null);
 
     const {  setData, post, processing, errors } = useForm({
         file: null as File | null,
@@ -103,6 +104,41 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
         window.location.href = admin.questions.sample({ question_type: type }).url;
     };
 
+    const handleToggleActive = (questionId: number) => {
+        router.post(`/admin/questions/${questionId}/toggle-active`, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Question status updated successfully');
+            },
+            onError: () => {
+                toast.error('Failed to update question status');
+            },
+        });
+    };
+
+    const handleDelete = (questionId: number) => {
+        setQuestionToDelete(questionId);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (questionToDelete) {
+            router.delete(admin.questions.destroy({ question: questionToDelete }).url, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Question deleted successfully');
+                    setDeleteDialogOpen(false);
+                    setQuestionToDelete(null);
+                },
+                onError: () => {
+                    toast.error('Failed to delete question');
+                },
+            });
+        }
+    };
+
     const getQuestionTypeBadge = (type: string) => {
         const colors = {
             'multiple_choice': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
@@ -117,12 +153,12 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
         <AppLayout>
             <Head title="Questions" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold">Questions</h1>
                         <p className="text-muted-foreground">Manage all questions in the question bank</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                         <Dialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen}>
                             <DialogTrigger asChild>
                                 <Button variant="outline">
@@ -205,7 +241,7 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                         <CardDescription>Filter questions by search, subject, exam type, or question type</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex gap-4">
+                        <div className="flex flex-col lg:flex-row gap-4">
                             <div className="flex-1">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -218,44 +254,46 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                                     />
                                 </div>
                             </div>
-                            <Select value={subjectId || 'all'} onValueChange={setSubjectId}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All Subjects" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Subjects</SelectItem>
-                                    {subjects.map((subject) => (
-                                        <SelectItem key={subject.id} value={subject.id.toString()}>
-                                            {subject.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Select value={examType || 'all'} onValueChange={setExamType}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All Exam Types" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Exam Types</SelectItem>
-                                    <SelectItem value="JAMB">JAMB</SelectItem>
-                                    <SelectItem value="DLI">DLI</SelectItem>
-                                    <SelectItem value="UNILAG">UNILAG</SelectItem>
-                                    <SelectItem value="GENERAL">GENERAL</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={questionType || 'all'} onValueChange={setQuestionType}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All Question Types" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Question Types</SelectItem>
-                                    <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
-                                    <SelectItem value="text_input">Text Input</SelectItem>
-                                    <SelectItem value="numeric_input">Numeric Input</SelectItem>
-                                    <SelectItem value="true_false">True/False</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Button onClick={handleFilter}>Filter</Button>
+                            <div className="flex flex-col sm:flex-row gap-2 flex-1 lg:flex-initial">
+                                <Select value={subjectId || 'all'} onValueChange={setSubjectId}>
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="All Subjects" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Subjects</SelectItem>
+                                        {subjects.map((subject) => (
+                                            <SelectItem key={subject.id} value={subject.id.toString()}>
+                                                {subject.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={examType || 'all'} onValueChange={setExamType}>
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="All Exam Types" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Exam Types</SelectItem>
+                                        <SelectItem value="JAMB">JAMB</SelectItem>
+                                        <SelectItem value="DLI">DLI</SelectItem>
+                                        <SelectItem value="UNILAG">UNILAG</SelectItem>
+                                        <SelectItem value="GENERAL">GENERAL</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Select value={questionType || 'all'} onValueChange={setQuestionType}>
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="All Question Types" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Question Types</SelectItem>
+                                        <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+                                        <SelectItem value="text_input">Text Input</SelectItem>
+                                        <SelectItem value="numeric_input">Numeric Input</SelectItem>
+                                        <SelectItem value="true_false">True/False</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button onClick={handleFilter} className="w-full sm:w-auto">Filter</Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -289,18 +327,23 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <FileQuestion className="h-4 w-4" />
-                                        <span>{question.points} point{question.points !== 1 ? 's' : ''}</span>
-                                        <span>•</span>
-                                        <span>Order: {question.order}</span>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <FileQuestion className="h-4 w-4 text-muted-foreground" />
+                                        <span className={`px-2 py-0.5 text-xs rounded ${question.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+                                            {question.is_active ? 'Active' : 'Inactive'}
+                                        </span>
                                     </div>
                                     {question.exam && (
                                         <div className="text-sm text-muted-foreground">
                                             Exam: {question.exam.title}
                                         </div>
                                     )}
-                                    <div className="flex gap-2 pt-2">
+                                    {question.answers_count !== undefined && question.answers_count > 0 && (
+                                        <div className="text-sm text-muted-foreground">
+                                            {question.answers_count} answer{question.answers_count !== 1 ? 's' : ''}
+                                        </div>
+                                    )}
+                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -311,6 +354,33 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Edit
                                             </Link>
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleToggleActive(question.id)}
+                                            className="flex-1"
+                                        >
+                                            {question.is_active ? (
+                                                <>
+                                                    <PowerOff className="mr-2 h-4 w-4" />
+                                                    Deactivate
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Power className="mr-2 h-4 w-4" />
+                                                    Activate
+                                                </>
+                                            )}
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => handleDelete(question.id)}
+                                            className="flex-1"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete
                                         </Button>
                                     </div>
                                 </div>
@@ -348,6 +418,26 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                         </Button>
                     </div>
                 )}
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete Question</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete this question? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={confirmDelete}>
+                                Delete
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

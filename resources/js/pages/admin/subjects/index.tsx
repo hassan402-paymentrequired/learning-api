@@ -6,10 +6,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { BookOpen, Plus, Search, Power, PowerOff,  Trash2, ArrowLeft } from 'lucide-react';
+import { BookOpen, Plus, Search, Power, PowerOff, Trash2, ArrowLeft, Edit } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 interface Subject {
     id: number;
@@ -40,6 +42,8 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [isActive, setIsActive] = useState(filters.is_active || '');
     const [selectedSubjects, setSelectedSubjects] = useState<number[]>([]);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [subjectToDelete, setSubjectToDelete] = useState<{ id: number; name: string } | null>(null);
 
     const handleFilter = () => {
         router.get(admin.subjects.index().url, {
@@ -78,9 +82,39 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
         }
     };
 
+    const handleToggleActive = (subjectId: number) => {
+        router.post(`/admin/subjects/${subjectId}/toggle-active`, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Subject status updated successfully');
+            },
+            onError: () => {
+                toast.error('Failed to update subject status');
+            },
+        });
+    };
+
     const handleDelete = (subjectId: number, subjectName: string) => {
-        if (confirm(`Are you sure you want to delete "${subjectName}"?`)) {
-            router.delete(admin.subjects.destroy(subjectId).url);
+        setSubjectToDelete({ id: subjectId, name: subjectName });
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (subjectToDelete) {
+            router.delete(admin.subjects.destroy(subjectToDelete.id).url, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Subject deleted successfully');
+                    setDeleteDialogOpen(false);
+                    setSubjectToDelete(null);
+                },
+                onError: (errors) => {
+                    const errorMessage = errors?.subject || 'Failed to delete subject';
+                    toast.error(errorMessage);
+                },
+            });
         }
     };
 
@@ -88,8 +122,8 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
         <AppLayout>
             <Head title="Subjects" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                         <Button asChild variant="outline" size="sm">
                             <Link href={admin.settings.index().url}>
                                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -153,7 +187,7 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                         <CardDescription>Filter subjects by search or status</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex gap-4">
+                        <div className="flex flex-col lg:flex-row gap-4">
                             <div className="flex-1">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -166,17 +200,19 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                                     />
                                 </div>
                             </div>
-                            <Select value={isActive || 'all'} onValueChange={setIsActive}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All Statuses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Statuses</SelectItem>
-                                    <SelectItem value="true">Active</SelectItem>
-                                    <SelectItem value="false">Inactive</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Button onClick={handleFilter}>Filter</Button>
+                            <div className="flex flex-col sm:flex-row gap-2 flex-1 lg:flex-initial">
+                                <Select value={isActive || 'all'} onValueChange={setIsActive}>
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="All Statuses" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Statuses</SelectItem>
+                                        <SelectItem value="true">Active</SelectItem>
+                                        <SelectItem value="false">Inactive</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button onClick={handleFilter} className="w-full sm:w-auto">Filter</Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -223,17 +259,38 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                                         <BookOpen className="h-4 w-4" />
                                         <span>Order: {subject.order}</span>
                                     </div>
-                                    <div className="flex gap-2 pt-2">
+                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             asChild
                                             className="flex-1"
                                         >
-                                            <Link href={admin.subjects.edit(subject.id).url}>Edit</Link>
+                                            <Link href={admin.subjects.edit(subject.id).url}>
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </Link>
                                         </Button>
                                         <Button
                                             variant="outline"
+                                            size="sm"
+                                            onClick={() => handleToggleActive(subject.id)}
+                                            className="flex-1"
+                                        >
+                                            {subject.is_active ? (
+                                                <>
+                                                    <PowerOff className="mr-2 h-4 w-4" />
+                                                    Deactivate
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Power className="mr-2 h-4 w-4" />
+                                                    Activate
+                                                </>
+                                            )}
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
                                             size="sm"
                                             onClick={() => handleDelete(subject.id, subject.name)}
                                             className="flex-1"
@@ -277,6 +334,26 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                         </Button>
                     </div>
                 )}
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete Subject</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete "{subjectToDelete?.name}"? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={confirmDelete}>
+                                Delete
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

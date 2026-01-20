@@ -26,8 +26,6 @@ interface Question {
     explanation: string | null;
     expected_answer: string | null;
     exam_types: string[] | null;
-    points: number;
-    order: number;
     subject_id: number | null;
     answers: Answer[];
     subject: {
@@ -61,8 +59,6 @@ export default function EditQuestion({ question, subjects }: Props) {
         exam_types: (question.exam_types && Array.isArray(question.exam_types)) 
             ? question.exam_types 
             : (question.exam_types ? [question.exam_types] : []),
-        points: question.points,
-        order: question.order,
         answers: question.answers.map(a => ({
             id: a.id,
             answer_text: a.answer_text,
@@ -262,34 +258,6 @@ export default function EditQuestion({ question, subjects }: Props) {
                                     </p>
                                 </div>
                             )}
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="points">Points *</Label>
-                                    <Input
-                                        id="points"
-                                        type="number"
-                                        min="1"
-                                        value={data.points}
-                                        onChange={(e) => setData('points', parseInt(e.target.value) || 1)}
-                                        required
-                                    />
-                                    <InputError message={errors.points} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="order">Question Order *</Label>
-                                    <Input
-                                        id="order"
-                                        type="number"
-                                        min="1"
-                                        value={data.order}
-                                        onChange={(e) => setData('order', parseInt(e.target.value) || 1)}
-                                        required
-                                    />
-                                    <InputError message={errors.order} />
-                                </div>
-                            </div>
 
                             <div className="grid gap-2">
                                 <Label htmlFor="explanation">Explanation</Label>

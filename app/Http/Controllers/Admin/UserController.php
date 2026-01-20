@@ -101,4 +101,62 @@ class UserController extends Controller
             'subjectPerformance' => $subjectPerformance,
         ]);
     }
+
+    /**
+     * Show the form for editing the specified user.
+     */
+    public function edit(User $user)
+    {
+        return Inertia::render('admin/users/edit', [
+            'user' => $user,
+        ]);
+    }
+
+    /**
+     * Update the specified user in storage.
+     */
+    public function update(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'is_admin' => 'boolean',
+        ]);
+
+        $user->update($validated);
+
+        return redirect()->route('admin.users.show', $user)
+            ->with('success', 'User updated successfully.');
+    }
+
+    /**
+     * Toggle admin status of a user.
+     */
+    public function toggleAdmin(Request $request, User $user)
+    {
+        $user->update([
+            'is_admin' => !$user->is_admin,
+        ]);
+
+        return redirect()->route('admin.users.index')
+            ->with('success', $user->is_admin ? 'User granted admin access.' : 'User admin access revoked.');
+    }
+
+    /**
+     * Remove the specified user from storage.
+     */
+    public function destroy(User $user)
+    {
+        // Prevent deleting yourself
+        if ($user->id === auth()->id()) {
+            return back()->withErrors([
+                'user' => 'You cannot delete your own account.'
+            ]);
+        }
+
+        $user->delete();
+
+        return redirect()->route('admin.users.index')
+            ->with('success', 'User deleted successfully.');
+    }
 }

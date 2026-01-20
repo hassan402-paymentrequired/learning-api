@@ -51,9 +51,8 @@ class PracticeAttemptController extends Controller
     /**
      * Display the specified practice attempt.
      */
-    public function show($id)
+    public function show(ExamAttempt $practiceAttempt)
     {
-        $practiceAttempt = ExamAttempt::findOrFail($id);
         $practiceAttempt->load([
             'user',
             'exam',
@@ -71,8 +70,6 @@ class PracticeAttemptController extends Controller
                     'id' => $question->id,
                     'question_text' => $question->question_text,
                     'explanation' => $question->explanation,
-                    'points' => $question->points,
-                    'order' => $question->order,
                 ],
                 'user_answer' => $userAnswer->answer ? [
                     'id' => $userAnswer->answer->id,
@@ -93,5 +90,16 @@ class PracticeAttemptController extends Controller
             'attempt' => $practiceAttempt,
             'results' => $results,
         ]);
+    }
+
+    /**
+     * Remove the specified practice attempt from storage.
+     */
+    public function destroy(ExamAttempt $practiceAttempt)
+    {
+        $practiceAttempt->delete();
+
+        return redirect()->route('admin.practice-attempts.index')
+            ->with('success', 'Practice attempt deleted successfully.');
     }
 }

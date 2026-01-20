@@ -152,6 +152,19 @@ class ExamController extends Controller
     }
 
     /**
+     * Toggle active status of an exam.
+     */
+    public function toggleActive(Request $request, Exam $exam)
+    {
+        $exam->update([
+            'is_active' => !$exam->is_active,
+        ]);
+
+        return redirect()->route('admin.exams.index')
+            ->with('success', $exam->is_active ? 'Exam activated successfully.' : 'Exam deactivated successfully.');
+    }
+
+    /**
      * Bulk update exams (activate/deactivate).
      */
     public function bulkUpdate(Request $request)

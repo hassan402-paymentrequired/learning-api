@@ -28,6 +28,7 @@ class User extends Authenticatable implements JWTSubject
         'referred_by',
         'paystack_customer_code',
         'subscription_expires_at',
+        'is_admin',
     ];
 
     /**
@@ -57,6 +58,7 @@ class User extends Authenticatable implements JWTSubject
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'subscription_expires_at' => 'datetime',
+            'is_admin' => 'boolean',
         ];
     }
 
@@ -135,6 +137,14 @@ class User extends Authenticatable implements JWTSubject
         return $this->subscription_status === 'active'
             && $this->subscription_expires_at
             && $this->subscription_expires_at->isFuture();
+    }
+
+    /**
+     * Check if user is an admin.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->is_admin === true;
     }
 
     /**

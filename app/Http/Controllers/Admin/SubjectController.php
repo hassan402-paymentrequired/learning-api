@@ -93,6 +93,45 @@ class SubjectController extends Controller
     }
 
     /**
+     * Toggle active status of a subject.
+     */
+    public function toggleActive(Request $request, Subject $subject)
+    {
+        $subject->update([
+            'is_active' => !$subject->is_active,
+        ]);
+
+        return redirect()->route('admin.subjects.index')
+            ->with('success', $subject->is_active ? 'Subject activated successfully.' : 'Subject deactivated successfully.');
+    }
+
+    /**
+     * Bulk update subjects (activate/deactivate).
+     */
+    public function bulkUpdate(Request $request)
+    {
+        $validated = $request->validate([
+            'subject_ids' => 'required|array',
+            'subject_ids.*' => 'exists:subjects,id',
+            'action' => 'required|in:activate,deactivate',
+        ]);
+
+        $action = $validated['action'];
+        $isActive = $action === 'activate';
+
+        Subject::whereIn('id', $validated['subject_ids'])
+            ->update(['is_active' => $isActive]);
+
+        $count = count($validated['subject_ids']);
+        $message = $isActive 
+            ? "{$count} subject(s) activated successfully."
+            : "{$count} subject(s) deactivated successfully.";
+
+        return redirect()->route('admin.subjects.index')
+            ->with('success', $message);
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(Subject $subject)
