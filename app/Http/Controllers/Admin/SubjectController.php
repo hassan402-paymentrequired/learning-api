@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Subject;
+use App\Models\Question;
+use App\Models\Answer;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpWord\IOFactory as WordIOFactory;
 
 class SubjectController extends Controller
 {
@@ -165,5 +169,586 @@ class SubjectController extends Controller
 
         return redirect()->route('admin.subjects.index')
             ->with('success', 'Subject deleted successfully.');
+    }
+
+    /**
+     * Download sample CSV template for bulk upload.
+     */
+    public function downloadSample(Request $request, Subject $subject)
+    {
+        $questionType = $request->get('question_type', 'multiple_choice');
+
+        if ($questionType === 'text_input') {
+            $filename = "questions_text_input_template_{$subject->slug}.csv";
+        } else if ($questionType === 'numeric_input') {
+            $filename = "questions_numeric_input_template_{$subject->slug}.csv";
+        } else if ($questionType === 'true_false') {
+            $filename = "questions_true_false_template_{$subject->slug}.csv";
+        } else {
+            $filename = "questions_multiple_choice_template_{$subject->slug}.csv";
+        }
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        $callback = function () use ($questionType, $subject) {
+            $file = fopen('php://output', 'w');
+
+            // Add BOM for Excel compatibility
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            if ($questionType === 'text_input' || $questionType === 'numeric_input') {
+                // Headers for text/numeric input questions
+                fputcsv($file, [
+                    'Question Text',
+                    'Expected Answer',
+                    'Alternative Answers (comma-separated, optional)',
+                    'Explanation (Optional)',
+                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                ]);
+
+                // Sample rows
+                fputcsv($file, [
+                    'What is the capital city of Nigeria?',
+                    'Abuja',
+                    'abuja,ABUJA',
+                    'Abuja became the capital of Nigeria in 1991, replacing Lagos.',
+                    'JAMB,DLI'
+                ]);
+            } else if ($questionType === 'true_false') {
+                // Headers for true/false questions
+                fputcsv($file, [
+                    'Question Text',
+                    'Expected Answer (true/false)',
+                    'Explanation (Optional)',
+                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                ]);
+
+                // Sample rows
+                fputcsv($file, [
+                    'The sum of 2 and 2 equals 4.',
+                    'true',
+                    'This is a basic arithmetic fact: 2 + 2 = 4.',
+                    'JAMB,DLI'
+                ]);
+            } else {
+                // Headers for multiple choice questions
+                fputcsv($file, [
+                    'Question Text',
+                    'Answer A',
+                    'Answer B',
+                    'Answer C',
+                    'Answer D',
+                    'Answer E (Optional)',
+                    'Correct Answer (A/B/C/D/E)',
+                    'Explanation (Optional)',
+                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                ]);
+
+                // Sample rows
+                fputcsv($file, [
+                    'What is 2 + 2?',
+                    '3',
+                    '4',
+                    '5',
+                    '6',
+                    '',
+                    'B',
+                    'Basic addition: 2 + 2 = 4',
+                    'JAMB,DLI'
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Handle bulk upload of questions from CSV, XLSX, or DOCX.
+     */
+    public function bulkUpload(Request $request, Subject $subject)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls,docx|max:10240', // 10MB max
+            'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
+        ]);
+
+        $questionType = $request->input('question_type');
+        $file = $request->file('file');
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        $rows = [];
+
+        // Parse file based on extension
+        if (in_array($extension, ['csv', 'txt'])) {
+            $rows = $this->parseCsv($file);
+        } elseif (in_array($extension, ['xlsx', 'xls'])) {
+            $rows = $this->parseExcel($file);
+        } elseif ($extension === 'docx') {
+            $rows = $this->parseDocx($file);
+        } else {
+            return back()->withErrors(['file' => 'Unsupported file format.']);
+        }
+
+        if (empty($rows)) {
+            return back()->withErrors(['file' => 'No data found in file.']);
+        }
+
+        $imported = 0;
+        $errors = [];
+        $rowNumber = 0;
+        $skipHeader = true;
+
+        // For DOCX narrative format, we might not have a header row
+        // Check if first row looks like a header (contains "Question Text" or similar)
+        if ($extension === 'docx' && !empty($rows)) {
+            $firstRow = is_array($rows[0]) ? $rows[0] : [];
+            $firstCell = is_array($firstRow) ? ($firstRow[0] ?? '') : '';
+            // If first row doesn't look like a header, don't skip it
+            if (!preg_match('/question.*text|subject.*name/i', $firstCell)) {
+                $skipHeader = false;
+            }
+        }
+
+        foreach ($rows as $row) {
+            $rowNumber++;
+
+            // Skip header row if it exists
+            if ($skipHeader && $rowNumber === 1) {
+                continue;
+            }
+
+            // Skip empty rows
+            if (empty(array_filter($row))) {
+                continue;
+            }
+
+            // Normalize row to array if needed
+            if (!is_array($row)) {
+                $row = is_string($row) ? str_getcsv($row) : (array) $row;
+            }
+
+            // Ensure row has enough elements
+            while (count($row) < 10) {
+                $row[] = '';
+            }
+
+            $questionText = trim($row[0] ?? '');
+
+            // Validation
+            if (empty($questionText)) {
+                $errors[] = "Row {$rowNumber}: Question text is required.";
+                continue;
+            }
+
+            // Parse exam types (column index depends on question type)
+            if ($questionType === 'multiple_choice') {
+                $examTypesColumn = 8;
+            } else if ($questionType === 'true_false') {
+                $examTypesColumn = 3;
+            } else {
+                $examTypesColumn = 4; // text_input, numeric_input
+            }
+            $examTypesString = trim($row[$examTypesColumn] ?? '');
+            $examTypes = [];
+            if (!empty($examTypesString)) {
+                $examTypes = array_map('trim', explode(',', $examTypesString));
+                $examTypes = array_filter($examTypes, function ($type) {
+                    return in_array(strtoupper($type), ['JAMB', 'DLI', 'UNILAG', 'GENERAL']);
+                });
+                $examTypes = array_map('strtoupper', $examTypes);
+            }
+            
+            // If no exam types specified, use subject's exam types as default
+            if (empty($examTypes)) {
+                if ($subject->exam_types && is_array($subject->exam_types)) {
+                    $examTypes = $subject->exam_types;
+                } else {
+                    // Fallback to JAMB and DLI if subject doesn't have exam_types
+                    $examTypes = ['JAMB', 'DLI'];
+                }
+            }
+
+            // Get explanation column (depends on question type)
+            if ($questionType === 'multiple_choice') {
+                $explanationColumn = 7;
+            } else if ($questionType === 'true_false') {
+                $explanationColumn = 2;
+            } else {
+                $explanationColumn = 3; // text_input, numeric_input
+            }
+
+            $explanation = trim($row[$explanationColumn] ?? '');
+
+            try {
+                if ($questionType === 'text_input' || $questionType === 'numeric_input') {
+                    // Handle text/numeric input questions
+                    $expectedAnswer = trim($row[1] ?? '');
+                    $alternativeAnswers = trim($row[2] ?? '');
+
+                    if (empty($expectedAnswer)) {
+                        $errors[] = "Row {$rowNumber}: Expected answer is required for text/numeric input questions.";
+                        continue;
+                    }
+
+                    // Combine expected answer and alternatives
+                    $allAnswers = [$expectedAnswer];
+                    if (!empty($alternativeAnswers)) {
+                        $alternatives = array_map('trim', explode(',', $alternativeAnswers));
+                        $allAnswers = array_merge($allAnswers, $alternatives);
+                    }
+                    $expectedAnswerString = implode(',', array_unique($allAnswers));
+
+                    // Create question
+                    $question = Question::create([
+                        'subject_id' => $subject->id,
+                        'question_text' => $questionText,
+                        'question_type' => $questionType,
+                        'expected_answer' => $expectedAnswerString,
+                        'explanation' => $explanation ?: null,
+                        'exam_types' => $examTypes,
+                        'is_active' => true,
+                    ]);
+                } else if ($questionType === 'true_false') {
+                    // Handle true/false questions
+                    $expectedAnswer = strtolower(trim($row[1] ?? ''));
+
+                    if (empty($expectedAnswer)) {
+                        $errors[] = "Row {$rowNumber}: Expected answer is required for true/false questions.";
+                        continue;
+                    }
+
+                    if (!in_array($expectedAnswer, ['true', 'false'])) {
+                        $errors[] = "Row {$rowNumber}: True/false questions must have expected answer of 'true' or 'false'.";
+                        continue;
+                    }
+
+                    // Create question
+                    $question = Question::create([
+                        'subject_id' => $subject->id,
+                        'question_text' => $questionText,
+                        'question_type' => 'true_false',
+                        'expected_answer' => $expectedAnswer,
+                        'explanation' => $explanation ?: null,
+                        'exam_types' => $examTypes,
+                        'is_active' => true,
+                    ]);
+                } else {
+                    // Handle multiple choice questions
+                    if (count($row) < 7) {
+                        $errors[] = "Row {$rowNumber}: Insufficient columns. Expected at least 7 columns.";
+                        continue;
+                    }
+
+                    $answerA = trim($row[1] ?? '');
+                    $answerB = trim($row[2] ?? '');
+                    $answerC = trim($row[3] ?? '');
+                    $answerD = trim($row[4] ?? '');
+                    $answerE = trim($row[5] ?? '');
+                    $correctAnswer = strtoupper(trim($row[6] ?? ''));
+
+                    if (empty($answerA) || empty($answerB) || empty($answerC) || empty($answerD)) {
+                        $errors[] = "Row {$rowNumber}: At least 4 answers (A, B, C, D) are required.";
+                        continue;
+                    }
+
+                    if (!in_array($correctAnswer, ['A', 'B', 'C', 'D', 'E'])) {
+                        $errors[] = "Row {$rowNumber}: Correct answer must be A, B, C, D, or E.";
+                        continue;
+                    }
+
+                    if ($correctAnswer === 'E' && empty($answerE)) {
+                        $errors[] = "Row {$rowNumber}: Answer E is marked as correct but is empty.";
+                        continue;
+                    }
+
+                    // Create question
+                    $question = Question::create([
+                        'subject_id' => $subject->id,
+                        'question_text' => $questionText,
+                        'question_type' => 'multiple_choice',
+                        'explanation' => $explanation ?: null,
+                        'exam_types' => $examTypes,
+                        'is_active' => true,
+                    ]);
+
+                    // Create answers
+                    $answers = [
+                        ['text' => $answerA, 'order' => 'A', 'correct' => $correctAnswer === 'A'],
+                        ['text' => $answerB, 'order' => 'B', 'correct' => $correctAnswer === 'B'],
+                        ['text' => $answerC, 'order' => 'C', 'correct' => $correctAnswer === 'C'],
+                        ['text' => $answerD, 'order' => 'D', 'correct' => $correctAnswer === 'D'],
+                    ];
+
+                    if (!empty($answerE)) {
+                        $answers[] = ['text' => $answerE, 'order' => 'E', 'correct' => $correctAnswer === 'E'];
+                    }
+
+                    foreach ($answers as $answerData) {
+                        $question->answers()->create([
+                            'answer_text' => $answerData['text'],
+                            'is_correct' => $answerData['correct'],
+                            'order' => $answerData['order'],
+                        ]);
+                    }
+                }
+
+                $imported++;
+            } catch (\Exception $e) {
+                $errors[] = "Row {$rowNumber}: Error - " . $e->getMessage();
+            }
+        }
+
+        if ($imported > 0) {
+            return redirect()->route('admin.subjects.show', $subject)
+                ->with('success', "Successfully imported {$imported} question(s).")
+                ->with('import_errors', $errors);
+        } else {
+            return redirect()->route('admin.subjects.show', $subject)
+                ->withErrors(['bulk_upload' => 'No questions were imported. Please check your file format.'])
+                ->with('import_errors', $errors);
+        }
+    }
+
+    /**
+     * Parse CSV file.
+     */
+    private function parseCsv($file): array
+    {
+        $rows = [];
+        $handle = fopen($file->getRealPath(), 'r');
+
+        // Skip BOM if present
+        $firstLine = fgets($handle);
+        if (substr($firstLine, 0, 3) !== "\xEF\xBB\xBF") {
+            rewind($handle);
+        } else {
+            fseek($handle, 3);
+        }
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $rows[] = $row;
+        }
+
+        fclose($handle);
+        return $rows;
+    }
+
+    /**
+     * Parse Excel file (XLSX/XLS).
+     */
+    private function parseExcel($file): array
+    {
+        $rows = [];
+        $spreadsheet = IOFactory::load($file->getRealPath());
+        $worksheet = $spreadsheet->getActiveSheet();
+        $highestRow = $worksheet->getHighestRow();
+        $highestColumn = $worksheet->getHighestColumn();
+
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $rowData = [];
+            for ($col = 'A'; $col <= $highestColumn; $col++) {
+                $cellValue = $worksheet->getCell($col . $row)->getValue();
+                $rowData[] = $cellValue !== null ? (string) $cellValue : '';
+            }
+            $rows[] = $rowData;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Parse DOCX file.
+     * Supports both table format and narrative text format.
+     */
+    private function parseDocx($file): array
+    {
+        $rows = [];
+        
+        try {
+            $phpWord = WordIOFactory::load($file->getRealPath());
+            $sections = $phpWord->getSections();
+            
+            $fullText = '';
+            $hasTables = false;
+
+            // First, check if document has tables and collect all text
+            foreach ($sections as $section) {
+                $elements = $section->getElements();
+                foreach ($elements as $element) {
+                    if (method_exists($element, 'getRows')) {
+                        $hasTables = true;
+                        // Handle tables
+                        $tableRows = $element->getRows();
+                        foreach ($tableRows as $tableRow) {
+                            $rowData = [];
+                            $cells = $tableRow->getCells();
+                            foreach ($cells as $cell) {
+                                $text = $this->extractTextFromElement($cell);
+                                $rowData[] = trim($text);
+                            }
+                            if (!empty(array_filter($rowData))) {
+                                $rows[] = $rowData;
+                            }
+                        }
+                    } else {
+                        // Collect all text
+                        $text = $this->extractTextFromElement($element);
+                        if (!empty(trim($text))) {
+                            $fullText .= trim($text) . "\n";
+                        }
+                    }
+                }
+            }
+
+            // If no tables found or tables are empty, parse narrative text format
+            if ((!$hasTables || empty($rows)) && !empty($fullText)) {
+                $parsedRows = $this->parseNarrativeFormat($fullText);
+                if (!empty($parsedRows)) {
+                    $rows = $parsedRows;
+                }
+            }
+        } catch (\Exception $e) {
+            throw new \Exception('Error parsing DOCX file: ' . $e->getMessage());
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Extract text from a PhpWord element recursively.
+     */
+    private function extractTextFromElement($element): string
+    {
+        $text = '';
+        
+        if ($element === null) {
+            return $text;
+        }
+        
+        // Try to get text directly
+        if (method_exists($element, 'getText')) {
+            try {
+                $text .= $element->getText();
+            } catch (\Exception $e) {
+                // Ignore errors and continue
+            }
+        }
+        
+        // Try to get text from nested elements
+        if (method_exists($element, 'getElements')) {
+            try {
+                $elements = $element->getElements();
+                if (is_array($elements) || $elements instanceof \Traversable) {
+                    foreach ($elements as $subElement) {
+                        $text .= $this->extractTextFromElement($subElement);
+                    }
+                }
+            } catch (\Exception $e) {
+                // Ignore errors and continue
+            }
+        }
+        
+        return $text;
+    }
+
+    /**
+     * Parse narrative text format (Question 1: ... a) ... b) ... Answer: c).
+     */
+    private function parseNarrativeFormat($text): array
+    {
+        $rows = [];
+        
+        // Normalize line endings and split
+        $text = str_replace(["\r\n", "\r"], "\n", $text);
+        $lines = explode("\n", $text);
+        
+        $currentQuestion = null;
+        $currentOptions = [];
+        $currentAnswer = null;
+        $inQuestion = false;
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            
+            // Skip empty lines
+            if (empty($line)) {
+                continue;
+            }
+            
+            // Skip section headers (e.g., "2. Components of a Marketing Information System (MIS)")
+            if (preg_match('/^\d+\.\s+[A-Z]/', $line)) {
+                continue;
+            }
+            
+            // Check if this is a question line (Question 1:, Question 2:, etc.)
+            if (preg_match('/^Question\s+\d+[:\-]?\s*(.*)$/i', $line, $matches)) {
+                // Save previous question if exists
+                if ($currentQuestion !== null && !empty($currentOptions) && $currentAnswer !== null) {
+                    $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer);
+                }
+                
+                // Start new question
+                $questionText = trim($matches[1]);
+                // If question text is on the same line, use it; otherwise it will be on the next line
+                $currentQuestion = !empty($questionText) ? $questionText : '';
+                $currentOptions = [];
+                $currentAnswer = null;
+                $inQuestion = true;
+            }
+            // Check if this is an option line (a), b), c), d), e))
+            elseif (preg_match('/^([a-e])\)\s*(.+)$/i', $line, $matches)) {
+                $optionLetter = strtoupper($matches[1]);
+                $optionText = trim($matches[2]);
+                $currentOptions[$optionLetter] = $optionText;
+            }
+            // Check if this is an answer line (Answer: a, Answer: b, etc.)
+            elseif (preg_match('/^Answer:\s*([a-e])/i', $line, $matches)) {
+                $currentAnswer = strtoupper(trim($matches[1]));
+                $inQuestion = false;
+            }
+            // If we're in a question block and it's not an option or answer, it might be question text or continuation
+            elseif ($inQuestion && !preg_match('/^Answer:/i', $line) && !preg_match('/^[a-e]\)/i', $line)) {
+                // If question text is empty, this is the question text
+                if (empty($currentQuestion)) {
+                    $currentQuestion = $line;
+                } else {
+                    // Otherwise, append to question text if it seems like continuation
+                    $currentQuestion .= ' ' . $line;
+                }
+            }
+        }
+        
+        // Don't forget the last question
+        if ($currentQuestion !== null && !empty($currentOptions) && $currentAnswer !== null) {
+            $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer);
+        }
+        
+        return $rows;
+    }
+
+    /**
+     * Build a question row in the expected format for multiple choice.
+     */
+    private function buildQuestionRow($questionText, $options, $correctAnswer): array
+    {
+        // Format: [Question Text, Answer A, Answer B, Answer C, Answer D, Answer E (optional), Correct Answer, Explanation, Exam Types]
+        $row = [
+            $questionText,
+            $options['A'] ?? '',
+            $options['B'] ?? '',
+            $options['C'] ?? '',
+            $options['D'] ?? '',
+            $options['E'] ?? '',
+            $correctAnswer,
+            '', // Explanation (empty by default)
+            'JAMB,DLI', // Default exam types - can be overridden if needed
+        ];
+        
+        return $row;
     }
 }

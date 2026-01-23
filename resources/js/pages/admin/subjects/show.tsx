@@ -1,11 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
-import { router, Link, Head } from '@inertiajs/react';
-import { ArrowLeft, FileQuestion, Edit, Trash2, Power, PowerOff, Plus } from 'lucide-react';
+import { router, Link, Head, useForm } from '@inertiajs/react';
+import { ArrowLeft, FileQuestion, Edit, Trash2, Power, PowerOff, Plus, Upload, Download } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { type BreadcrumbItem } from '@/types';
 
@@ -57,6 +60,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function SubjectShow({ subject, questions }: Props) {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [questionToDelete, setQuestionToDelete] = useState<number | null>(null);
+    const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
+    const [questionType, setQuestionType] = useState<'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false'>('multiple_choice');
+    const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+
+    const { data, setData, post, processing, errors: formErrors } = useForm({
+        file: null as File | null,
+        question_type: 'multiple_choice',
+    });
 
     const getQuestionTypeBadge = (type: string) => {
         const colors = {
@@ -103,6 +114,53 @@ export default function SubjectShow({ subject, questions }: Props) {
         }
     };
 
+    const handleBulkUpload = (e: React.FormEvent) => {
+        e.preventDefault();
+        setUploadErrors([]);
+
+        if (!data.file) {
+            setUploadErrors(['Please select a file to upload.']);
+            return;
+        }
+
+        setData('question_type', questionType);
+
+        const url = `/admin/subjects/${subject.id}/questions/bulk-upload`;
+        post(url, {
+            forceFormData: true,
+            data: {
+                ...data,
+                question_type: questionType,
+            },
+            onSuccess: () => {
+                setData('file', null);
+                setBulkUploadOpen(false);
+                // Reset file input
+                const fileInput = document.getElementById(
+                    'bulk-upload-file',
+                ) as HTMLInputElement;
+                if (fileInput) fileInput.value = '';
+                toast.success('Questions uploaded successfully');
+            },
+            onError: (errors) => {
+                if (errors.file) {
+                    setUploadErrors([errors.file]);
+                }
+                if (errors.question_type) {
+                    setUploadErrors([...uploadErrors, errors.question_type]);
+                }
+                if (errors.bulk_upload) {
+                    setUploadErrors([...uploadErrors, errors.bulk_upload]);
+                }
+            },
+        });
+    };
+
+    const downloadSample = () => {
+        const url = `/admin/subjects/${subject.id}/questions/sample?question_type=${questionType}`;
+        window.location.href = url;
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${subject.name} - Questions`} />
@@ -123,6 +181,91 @@ export default function SubjectShow({ subject, questions }: Props) {
                                 Edit Subject
                             </Link>
                         </Button>
+                        <Dialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline">
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Bulk Upload Questions
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[500px]">
+                                <DialogHeader>
+                                    <DialogTitle>Bulk Upload Questions</DialogTitle>
+                                    <DialogDescription>
+                                        Upload questions for <strong>{subject.name}</strong> from CSV, XLSX, or DOCX file.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <form onSubmit={handleBulkUpload} className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="question_type">Question Type</Label>
+                                        <Select
+                                            value={questionType}
+                                            onValueChange={(value: 'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false') => {
+                                                setQuestionType(value);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+                                                <SelectItem value="text_input">Text Input</SelectItem>
+                                                <SelectItem value="numeric_input">Numeric Input</SelectItem>
+                                                <SelectItem value="true_false">True/False</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="bulk-upload-file">File (CSV, XLSX, or DOCX)</Label>
+                                        <Input
+                                            id="bulk-upload-file"
+                                            type="file"
+                                            accept=".csv,.txt,.xlsx,.xls,.docx"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0] || null;
+                                                setData('file', file);
+                                                setUploadErrors([]);
+                                            }}
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Supported formats: CSV, TXT, XLSX, XLS, DOCX (Max 10MB)
+                                        </p>
+                                    </div>
+                                    {uploadErrors.length > 0 && (
+                                        <div className="rounded-md bg-destructive/15 p-3">
+                                            <ul className="list-disc list-inside text-sm text-destructive">
+                                                {uploadErrors.map((error, index) => (
+                                                    <li key={index}>{error}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {formErrors.file && (
+                                        <div className="rounded-md bg-destructive/15 p-3">
+                                            <p className="text-sm text-destructive">{formErrors.file}</p>
+                                        </div>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={downloadSample}
+                                            className="flex-1"
+                                        >
+                                            <Download className="mr-2 h-4 w-4" />
+                                            Download Sample
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={processing || !data.file}
+                                            className="flex-1"
+                                        >
+                                            {processing ? 'Uploading...' : 'Upload'}
+                                        </Button>
+                                    </div>
+                                </form>
+                            </DialogContent>
+                        </Dialog>
                         <Button asChild>
                             <Link href={admin.questions.create().url}>
                                 <Plus className="mr-2 h-4 w-4" />

@@ -68,6 +68,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'update'])->name('update');
             Route::post('/{subject}/toggle-active', [App\Http\Controllers\Admin\SubjectController::class, 'toggleActive'])->name('toggle-active');
             Route::post('/bulk-update', [App\Http\Controllers\Admin\SubjectController::class, 'bulkUpdate'])->name('bulk-update');
+            Route::get('/{subject}/questions/sample', [App\Http\Controllers\Admin\SubjectController::class, 'downloadSample'])->name('questions.sample');
+            Route::post('/{subject}/questions/bulk-upload', [App\Http\Controllers\Admin\SubjectController::class, 'bulkUpload'])->name('questions.bulk-upload');
             Route::delete('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'destroy'])->name('destroy');
         });
 
