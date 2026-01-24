@@ -298,8 +298,19 @@ class SubjectController extends Controller
         }
 
         if (empty($rows)) {
-            return back()->withErrors(['file' => 'No data found in file.']);
+            \Log::error('Bulk upload: No rows parsed from file', [
+                'extension' => $extension,
+                'file_size' => $file->getSize(),
+            ]);
+            return back()->withErrors(['file' => 'No data found in file. Please check the file format.']);
         }
+
+        \Log::info('Bulk upload: Parsed rows', [
+            'row_count' => count($rows),
+            'extension' => $extension,
+            'question_type' => $questionType,
+            'exam_type' => $selectedExamType,
+        ]);
 
         $imported = 0;
         $errors = [];
@@ -497,18 +508,42 @@ class SubjectController extends Controller
                 }
 
                 $imported++;
+                \Log::info("Bulk upload: Successfully imported question", [
+                    'row_number' => $rowNumber,
+                    'question_text' => substr($questionText, 0, 50),
+                ]);
             } catch (\Exception $e) {
-                $errors[] = "Row {$rowNumber}: Error - " . $e->getMessage();
+                $errorMessage = "Row {$rowNumber}: Error - " . $e->getMessage();
+                $errors[] = $errorMessage;
+                \Log::error('Bulk upload: Failed to import question', [
+                    'row_number' => $rowNumber,
+                    'question_text' => substr($questionText, 0, 50),
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
         }
 
         if ($imported > 0) {
+            $message = "Successfully imported {$imported} question(s).";
+            if (!empty($errors)) {
+                $message .= " " . count($errors) . " error(s) occurred during import.";
+            }
             return redirect()->route('admin.subjects.show', $subject)
-                ->with('success-toast', "Successfully imported {$imported} question(s).")
+                ->with('success-toast', $message)
                 ->with('import_errors', $errors);
         } else {
+            $errorMessage = 'No questions were imported. ';
+            if (!empty($errors)) {
+                $errorMessage .= 'Errors: ' . implode('; ', array_slice($errors, 0, 5));
+                if (count($errors) > 5) {
+                    $errorMessage .= ' (and ' . (count($errors) - 5) . ' more)';
+                }
+            } else {
+                $errorMessage .= 'Please check your file format. The file may be empty or in an unsupported format.';
+            }
             return redirect()->route('admin.subjects.show', $subject)
-                ->withErrors(['bulk_upload' => 'No questions were imported. Please check your file format.'])
+                ->withErrors(['bulk_upload' => $errorMessage])
                 ->with('import_errors', $errors);
         }
     }
@@ -664,12 +699,15 @@ class SubjectController extends Controller
         
         // Normalize line endings and split
         $text = str_replace(["\r\n", "\r"], "\n", $text);
+        // Remove excessive whitespace but preserve structure
+        $text = preg_replace('/\n{3,}/', "\n\n", $text);
         $lines = explode("\n", $text);
         
         $currentQuestion = null;
         $currentOptions = [];
         $currentAnswer = null;
         $inQuestion = false;
+        $foundOptions = false;
         
         foreach ($lines as $line) {
             $line = trim($line);
@@ -687,45 +725,62 @@ class SubjectController extends Controller
             // Check if this is a question line (Question 1:, Question 2:, etc.)
             if (preg_match('/^Question\s+\d+[:\-]?\s*(.*)$/i', $line, $matches)) {
                 // Save previous question if exists
-                if ($currentQuestion !== null && !empty($currentOptions) && $currentAnswer !== null) {
-                    $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer, $examType);
+                if ($currentQuestion !== null && !empty(trim($currentQuestion)) && !empty($currentOptions) && $currentAnswer !== null) {
+                    $rows[] = $this->buildQuestionRow(trim($currentQuestion), $currentOptions, $currentAnswer, $examType);
                 }
                 
                 // Start new question
                 $questionText = trim($matches[1]);
                 // If question text is on the same line, use it; otherwise it will be on the next line
-                $currentQuestion = !empty($questionText) ? $questionText : '';
+                $currentQuestion = !empty($questionText) ? $questionText : null; // Use null to indicate we're waiting for question text
                 $currentOptions = [];
                 $currentAnswer = null;
                 $inQuestion = true;
+                $foundOptions = false;
             }
-            // Check if this is an option line (a), b), c), d), e))
-            elseif (preg_match('/^([a-e])\)\s*(.+)$/i', $line, $matches)) {
-                $optionLetter = strtoupper($matches[1]);
+            // Check if this is an option line (a), b), c), d), e)) - handle both formats
+            elseif (preg_match('/^([a-eA-E])[\)\.]\s*(.+)$/i', $line, $matches)) {
+                $optionLetter = strtoupper(trim($matches[1]));
                 $optionText = trim($matches[2]);
-                $currentOptions[$optionLetter] = $optionText;
+                if (!empty($optionText)) {
+                    $currentOptions[$optionLetter] = $optionText;
+                    $foundOptions = true;
+                }
             }
-            // Check if this is an answer line (Answer: a, Answer: b, etc.)
-            elseif (preg_match('/^Answer:\s*([a-e])/i', $line, $matches)) {
+            // Check if this is an answer line (Answer: a, Answer: b, Answer: c, etc.) - more flexible
+            elseif (preg_match('/^Answer[s]?[:\-]?\s*([a-eA-E])/i', $line, $matches)) {
                 $currentAnswer = strtoupper(trim($matches[1]));
                 $inQuestion = false;
             }
             // If we're in a question block and it's not an option or answer, it might be question text or continuation
-            elseif ($inQuestion && !preg_match('/^Answer:/i', $line) && !preg_match('/^[a-e]\)/i', $line)) {
-                // If question text is empty, this is the question text
-                if (empty($currentQuestion)) {
-                    $currentQuestion = $line;
-                } else {
-                    // Otherwise, append to question text if it seems like continuation
-                    $currentQuestion .= ' ' . $line;
+            elseif ($inQuestion && !preg_match('/^Answer[s]?:/i', $line) && !preg_match('/^[a-eA-E][\)\.]/i', $line) && !preg_match('/^\d+\.\s+[A-Z]/', $line)) {
+                // If we haven't found options yet, this is likely question text
+                if (!$foundOptions) {
+                    // If question text is null or empty, this is the question text
+                    if ($currentQuestion === null || empty($currentQuestion)) {
+                        $currentQuestion = $line;
+                    } else {
+                        // Otherwise, append to question text if it seems like continuation
+                        // Don't append if it looks like a new question or section
+                        if (!preg_match('/^Question\s+\d+/i', $line) && !preg_match('/^[A-Z][a-z]+.*:$/', $line)) {
+                            $currentQuestion .= ' ' . $line;
+                        }
+                    }
                 }
+                // If we've found options, ignore continuation text (might be explanation or other content)
             }
         }
         
         // Don't forget the last question
-        if ($currentQuestion !== null && !empty($currentOptions) && $currentAnswer !== null) {
-            $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer, $examType);
+        if ($currentQuestion !== null && !empty(trim($currentQuestion)) && !empty($currentOptions) && $currentAnswer !== null) {
+            $rows[] = $this->buildQuestionRow(trim($currentQuestion), $currentOptions, $currentAnswer, $examType);
         }
+        
+        // Log parsing results for debugging
+        \Log::info('DOCX narrative parsing completed', [
+            'total_questions_parsed' => count($rows),
+            'exam_type' => $examType,
+        ]);
         
         return $rows;
     }

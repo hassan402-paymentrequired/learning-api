@@ -51,7 +51,13 @@ export default function ViewQuestionModal({ question, open, onOpenChange, onTogg
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent 
                     className="overflow-y-auto p-6"
-                    style={{ width: '80vw', height: '80vh', maxWidth: '80vw', maxHeight: '80vh' }}
+                    style={{ 
+                        width: '80vw', 
+                        height: '80vh', 
+                        maxWidth: '80vw', 
+                        maxHeight: '80vh',
+                        margin: '10vh auto'
+                    }}
                 >
                     <div className="flex items-center justify-center h-full">
                         <div className="text-center">
@@ -80,12 +86,18 @@ export default function ViewQuestionModal({ question, open, onOpenChange, onTogg
         ? (question.image.startsWith('http') ? question.image : `/storage/${question.image}`)
         : null;
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent 
-                className="overflow-y-auto p-6"
-                style={{ width: '80vw', height: '80vh', maxWidth: '80vw', maxHeight: '80vh' }}
-            >
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent 
+                    className="overflow-y-auto p-6"
+                    style={{ 
+                        width: '80vw', 
+                        height: '80vh', 
+                        maxWidth: '80vw', 
+                        maxHeight: '80vh',
+                        margin: '10vh auto'
+                    }}
+                >
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <div>
