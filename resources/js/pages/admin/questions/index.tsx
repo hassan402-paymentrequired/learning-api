@@ -6,19 +6,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { router, useForm, Link, Head } from '@inertiajs/react';
-import { Search, FileQuestion, Plus, Upload, Download, Edit, Trash2, Power, PowerOff } from 'lucide-react';
+import { Search, FileQuestion, Plus, Upload, Download, Edit, Trash2, Power, PowerOff, Eye, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import ViewQuestionModal from '@/components/view-question-modal';
+import axios from 'axios';
+
+interface Answer {
+    id: number;
+    answer_text: string;
+    is_correct: boolean;
+    order: string;
+}
 
 interface Question {
     id: number;
     question_text: string;
+    image?: string | null;
     question_type: 'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false';
     exam_types: string[];
     is_active: boolean;
+    explanation?: string | null;
+    expected_answer?: string | null;
     subject: {
         id: number;
         name: string;
@@ -29,6 +42,7 @@ interface Question {
         exam_type: string;
     } | null;
     answers_count?: number;
+    answers?: Answer[];
 }
 
 interface Subject {
@@ -63,6 +77,9 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
     const [selectedQuestionType, setSelectedQuestionType] = useState<'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false'>('multiple_choice');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [questionToDelete, setQuestionToDelete] = useState<number | null>(null);
+    const [viewModalOpen, setViewModalOpen] = useState(false);
+    const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
+    const [loadingQuestion, setLoadingQuestion] = useState(false);
 
     const {  setData, post, processing, errors } = useForm({
         file: null as File | null,
@@ -136,6 +153,25 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                     toast.error('Failed to delete question');
                 },
             });
+        }
+    };
+
+    const handleViewQuestion = async (questionId: number) => {
+        setLoadingQuestion(true);
+        setViewModalOpen(true);
+        try {
+            const response = await axios.get(admin.questions.show({ question: questionId }).url);
+            if (response.data.success) {
+                setViewingQuestion(response.data.data);
+            } else {
+                toast.error('Failed to load question details');
+                setViewModalOpen(false);
+            }
+        } catch (error) {
+            toast.error('Failed to load question details');
+            setViewModalOpen(false);
+        } finally {
+            setLoadingQuestion(false);
         }
     };
 
@@ -343,45 +379,52 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                                             {question.answers_count} answer{question.answers_count !== 1 ? 's' : ''}
                                         </div>
                                     )}
-                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                                    <div className="flex items-center justify-end gap-2 pt-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            asChild
-                                            className="flex-1"
+                                            onClick={() => handleViewQuestion(question.id)}
                                         >
-                                            <Link href={admin.questions.edit({ question: question.id }).url}>
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Edit
-                                            </Link>
+                                            <Eye className="mr-2 h-4 w-4" />
+                                            View
                                         </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleToggleActive(question.id)}
-                                            className="flex-1"
-                                        >
-                                            {question.is_active ? (
-                                                <>
-                                                    <PowerOff className="mr-2 h-4 w-4" />
-                                                    Deactivate
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Power className="mr-2 h-4 w-4" />
-                                                    Activate
-                                                </>
-                                            )}
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleDelete(question.id)}
-                                            className="flex-1"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete
-                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                    <span className="sr-only">Open menu</span>
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={admin.questions.edit({ question: question.id }).url}>
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        Edit
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleToggleActive(question.id)}>
+                                                    {question.is_active ? (
+                                                        <>
+                                                            <PowerOff className="mr-2 h-4 w-4" />
+                                                            Deactivate
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Power className="mr-2 h-4 w-4" />
+                                                            Activate
+                                                        </>
+                                                    )}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem 
+                                                    onClick={() => handleDelete(question.id)}
+                                                    variant="destructive"
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 </div>
                             </CardContent>
@@ -438,6 +481,19 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
+
+                {/* View Question Modal */}
+                <ViewQuestionModal
+                    question={viewingQuestion}
+                    open={viewModalOpen}
+                    onOpenChange={setViewModalOpen}
+                    onToggleActive={handleToggleActive}
+                    onDelete={(questionId) => {
+                        setQuestionToDelete(questionId);
+                        setDeleteDialogOpen(true);
+                        setViewModalOpen(false);
+                    }}
+                />
             </div>
         </AppLayout>
     );

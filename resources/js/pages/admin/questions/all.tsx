@@ -4,22 +4,42 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { router, Link,Head } from '@inertiajs/react';
-import { Search, FileQuestion, BookOpen } from 'lucide-react';
+import { Search, FileQuestion, BookOpen, Eye, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
+import ViewQuestionModal from '@/components/view-question-modal';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import axios from 'axios';
+
+interface Answer {
+    id: number;
+    answer_text: string;
+    is_correct: boolean;
+    order: string;
+}
 
 interface Question {
     id: number;
     question_text: string;
-    question_type: string;
-    points: number;
-    order: number;
+    image?: string | null;
+    question_type: 'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false';
+    exam_types?: string[];
+    is_active?: boolean;
+    explanation?: string | null;
+    expected_answer?: string | null;
+    points?: number;
+    order?: number;
+    subject?: {
+        id: number;
+        name: string;
+    } | null;
     exam: {
         id: number;
         title: string;
         exam_type: string;
     };
     answers_count?: number;
+    answers?: Answer[];
 }
 
 interface Exam {
@@ -48,6 +68,26 @@ export default function QuestionsAll({ questions, exams, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [examId, setExamId] = useState(filters.exam_id || '');
     const [examType, setExamType] = useState(filters.exam_type || '');
+    const [viewModalOpen, setViewModalOpen] = useState(false);
+    const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
+    const [loadingQuestion, setLoadingQuestion] = useState(false);
+
+    const handleViewQuestion = async (questionId: number) => {
+        setLoadingQuestion(true);
+        setViewModalOpen(true);
+        try {
+            const response = await axios.get(admin.questions.show({ question: questionId }).url);
+            if (response.data.success) {
+                setViewingQuestion(response.data.data);
+            } else {
+                setViewModalOpen(false);
+            }
+        } catch (error) {
+            setViewModalOpen(false);
+        } finally {
+            setLoadingQuestion(false);
+        }
+    };
 
     const handleFilter = () => {
         router.get('/admin/questions', {
@@ -220,6 +260,13 @@ export default function QuestionsAll({ questions, exams, filters }: Props) {
                         )}
                     </CardContent>
                 </Card>
+
+                {/* View Question Modal */}
+                <ViewQuestionModal
+                    question={viewingQuestion}
+                    open={viewModalOpen}
+                    onOpenChange={setViewModalOpen}
+                />
             </div>
         </AppLayout>
     );

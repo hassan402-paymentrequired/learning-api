@@ -2,13 +2,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { router, Link, Head, useForm } from '@inertiajs/react';
-import { ArrowLeft, FileQuestion, Edit, Trash2, Power, PowerOff, Plus, Upload, Download } from 'lucide-react';
+import { ArrowLeft, FileQuestion, Edit, Trash2, Power, PowerOff, Plus, Upload, Download, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { type BreadcrumbItem } from '@/types';
 
@@ -62,11 +63,13 @@ export default function SubjectShow({ subject, questions }: Props) {
     const [questionToDelete, setQuestionToDelete] = useState<number | null>(null);
     const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
     const [questionType, setQuestionType] = useState<'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false'>('multiple_choice');
+    const [examType, setExamType] = useState<'JAMB' | 'DLI'>('JAMB');
     const [uploadErrors, setUploadErrors] = useState<string[]>([]);
 
     const { data, setData, post, processing, errors: formErrors } = useForm({
         file: null as File | null,
         question_type: 'multiple_choice',
+        exam_type: 'JAMB',
     });
 
     const getQuestionTypeBadge = (type: string) => {
@@ -124,6 +127,7 @@ export default function SubjectShow({ subject, questions }: Props) {
         }
 
         setData('question_type', questionType);
+        setData('exam_type', examType);
 
         const url = `/admin/subjects/${subject.id}/questions/bulk-upload`;
         post(url, {
@@ -131,6 +135,7 @@ export default function SubjectShow({ subject, questions }: Props) {
             data: {
                 ...data,
                 question_type: questionType,
+                exam_type: examType,
             },
             onSuccess: () => {
                 setData('file', null);
@@ -157,7 +162,7 @@ export default function SubjectShow({ subject, questions }: Props) {
     };
 
     const downloadSample = () => {
-        const url = `/admin/subjects/${subject.id}/questions/sample?question_type=${questionType}`;
+        const url = `/admin/subjects/${subject.id}/questions/sample?question_type=${questionType}&exam_type=${examType}`;
         window.location.href = url;
     };
 
@@ -212,6 +217,23 @@ export default function SubjectShow({ subject, questions }: Props) {
                                                 <SelectItem value="text_input">Text Input</SelectItem>
                                                 <SelectItem value="numeric_input">Numeric Input</SelectItem>
                                                 <SelectItem value="true_false">True/False</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="exam_type">Exam Type</Label>
+                                        <Select
+                                            value={examType}
+                                            onValueChange={(value: 'JAMB' | 'DLI') => {
+                                                setExamType(value);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="JAMB">JAMB</SelectItem>
+                                                <SelectItem value="DLI">DLI</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -293,7 +315,7 @@ export default function SubjectShow({ subject, questions }: Props) {
                                             {question.question_text.substring(0, 80)}{question.question_text.length > 80 ? '...' : ''}
                                         </CardTitle>
                                         <CardDescription className="mt-1">
-                                            {question.exam_types && question.exam_types.length > 0 && 
+                                            {question.exam_types && question.exam_types.length > 0 &&
                                                 question.exam_types.join(', ')
                                             }
                                         </CardDescription>
@@ -316,45 +338,44 @@ export default function SubjectShow({ subject, questions }: Props) {
                                             {question.answers_count} answer{question.answers_count !== 1 ? 's' : ''}
                                         </div>
                                     )}
-                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                            className="flex-1"
-                                        >
-                                            <Link href={admin.questions.edit({ question: question.id }).url}>
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Edit
-                                            </Link>
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleToggleActive(question.id)}
-                                            className="flex-1"
-                                        >
-                                            {question.is_active ? (
-                                                <>
-                                                    <PowerOff className="mr-2 h-4 w-4" />
-                                                    Deactivate
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Power className="mr-2 h-4 w-4" />
-                                                    Activate
-                                                </>
-                                            )}
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleDelete(question.id)}
-                                            className="flex-1"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete
-                                        </Button>
+                                    <div className="flex justify-end pt-2">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                    <span className="sr-only">Open menu</span>
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={admin.questions.edit({ question: question.id }).url}>
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        Edit
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleToggleActive(question.id)}>
+                                                    {question.is_active ? (
+                                                        <>
+                                                            <PowerOff className="mr-2 h-4 w-4" />
+                                                            Deactivate
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Power className="mr-2 h-4 w-4" />
+                                                            Activate
+                                                        </>
+                                                    )}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    onClick={() => handleDelete(question.id)}
+                                                    variant="destructive"
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 </div>
                             </CardContent>

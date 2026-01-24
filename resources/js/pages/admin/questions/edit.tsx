@@ -22,6 +22,7 @@ interface Answer {
 interface Question {
     id: number;
     question_text: string;
+    image?: string | null;
     question_type: 'multiple_choice' | 'text_input' | 'numeric_input' | 'true_false';
     explanation: string | null;
     expected_answer: string | null;
@@ -50,9 +51,11 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function EditQuestion({ question, subjects }: Props) {
+    console.log('summitted')
     const { data, setData, patch, processing, errors } = useForm({
         subject_id: question.subject_id?.toString() || '',
         question_text: question.question_text,
+        image: null as File | null,
         question_type: question.question_type,
         explanation: question.explanation || '',
         expected_answer: question.expected_answer || '',
@@ -98,8 +101,13 @@ export default function EditQuestion({ question, subjects }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        patch(admin.questions.update({ question: question.id }).url);
+        console.log('summitted')
+        patch(admin.questions.update({ question: question.id }).url, {
+            forceFormData: !!data.image,
+        });
     };
+
+
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -116,7 +124,7 @@ export default function EditQuestion({ question, subjects }: Props) {
                         <CardDescription>Update the question and answer options</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Form onSubmit={submit} className="space-y-6">
+                        <form onSubmit={submit} className="space-y-6">
                             <div className="grid gap-2">
                                 <Label htmlFor="subject_id">Subject *</Label>
                                 <Select
@@ -148,6 +156,46 @@ export default function EditQuestion({ question, subjects }: Props) {
                                     required
                                 />
                                 <InputError message={errors.question_text} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="image">
+                                    Question Image (Optional)
+                                </Label>
+                                <Input
+                                    id="image"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0] || null;
+                                        setData('image', file);
+                                    }}
+                                />
+                                <p className="text-sm text-muted-foreground">
+                                    Upload an image or diagram for this question (e.g., math diagrams, charts)
+                                </p>
+                                {data.image ? (
+                                    <div className="mt-2">
+                                        <img
+                                            src={URL.createObjectURL(data.image)}
+                                            alt="Preview"
+                                            className="max-w-xs h-auto rounded-lg border border-border"
+                                        />
+                                    </div>
+                                ) : question.image ? (
+                                    <div className="mt-2">
+                                        <p className="text-sm text-muted-foreground mb-2">Current image:</p>
+                                        <img
+                                            src={question.image.startsWith('http') ? question.image : `/storage/${question.image}`}
+                                            alt="Current question image"
+                                            className="max-w-xs h-auto rounded-lg border border-border"
+                                            onError={(e) => {
+                                                (e.target as HTMLImageElement).style.display = 'none';
+                                            }}
+                                        />
+                                    </div>
+                                ) : null}
+                                <InputError message={errors.image} />
                             </div>
 
                             <div className="grid gap-2">
@@ -309,7 +357,7 @@ export default function EditQuestion({ question, subjects }: Props) {
                                     <a href={admin.questions.index().url}>Cancel</a>
                                 </Button>
                             </div>
-                        </Form>
+                        </form>
                     </CardContent>
                 </Card>
             </div>

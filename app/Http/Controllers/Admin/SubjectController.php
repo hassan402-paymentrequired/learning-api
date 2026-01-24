@@ -177,6 +177,7 @@ class SubjectController extends Controller
     public function downloadSample(Request $request, Subject $subject)
     {
         $questionType = $request->get('question_type', 'multiple_choice');
+        $examType = $request->get('exam_type', 'JAMB');
 
         if ($questionType === 'text_input') {
             $filename = "questions_text_input_template_{$subject->slug}.csv";
@@ -193,7 +194,7 @@ class SubjectController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ];
 
-        $callback = function () use ($questionType, $subject) {
+        $callback = function () use ($questionType, $examType, $subject) {
             $file = fopen('php://output', 'w');
 
             // Add BOM for Excel compatibility
@@ -215,7 +216,7 @@ class SubjectController extends Controller
                     'Abuja',
                     'abuja,ABUJA',
                     'Abuja became the capital of Nigeria in 1991, replacing Lagos.',
-                    'JAMB,DLI'
+                    $examType
                 ]);
             } else if ($questionType === 'true_false') {
                 // Headers for true/false questions
@@ -231,7 +232,7 @@ class SubjectController extends Controller
                     'The sum of 2 and 2 equals 4.',
                     'true',
                     'This is a basic arithmetic fact: 2 + 2 = 4.',
-                    'JAMB,DLI'
+                    $examType
                 ]);
             } else {
                 // Headers for multiple choice questions
@@ -257,7 +258,7 @@ class SubjectController extends Controller
                     '',
                     'B',
                     'Basic addition: 2 + 2 = 4',
-                    'JAMB,DLI'
+                    $examType
                 ]);
             }
 
@@ -275,9 +276,11 @@ class SubjectController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:csv,txt,xlsx,xls,docx|max:10240', // 10MB max
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
+            'exam_type' => 'required|in:JAMB,DLI',
         ]);
 
         $questionType = $request->input('question_type');
+        $selectedExamType = $request->input('exam_type');
         $file = $request->file('file');
         $extension = strtolower($file->getClientOriginalExtension());
 
@@ -289,7 +292,7 @@ class SubjectController extends Controller
         } elseif (in_array($extension, ['xlsx', 'xls'])) {
             $rows = $this->parseExcel($file);
         } elseif ($extension === 'docx') {
-            $rows = $this->parseDocx($file);
+            $rows = $this->parseDocx($file, $selectedExamType);
         } else {
             return back()->withErrors(['file' => 'Unsupported file format.']);
         }
@@ -355,6 +358,8 @@ class SubjectController extends Controller
             }
             $examTypesString = trim($row[$examTypesColumn] ?? '');
             $examTypes = [];
+            
+            // Check if exam types are specified in the file
             if (!empty($examTypesString)) {
                 $examTypes = array_map('trim', explode(',', $examTypesString));
                 $examTypes = array_filter($examTypes, function ($type) {
@@ -363,15 +368,9 @@ class SubjectController extends Controller
                 $examTypes = array_map('strtoupper', $examTypes);
             }
             
-            // If no exam types specified, use subject's exam types as default
-            if (empty($examTypes)) {
-                if ($subject->exam_types && is_array($subject->exam_types)) {
-                    $examTypes = $subject->exam_types;
-                } else {
-                    // Fallback to JAMB and DLI if subject doesn't have exam_types
-                    $examTypes = ['JAMB', 'DLI'];
-                }
-            }
+            // Always use the selected exam type from the form
+            // This ensures consistency - when user selects JAMB only, all questions get JAMB only
+            $examTypes = [$selectedExamType];
 
             // Get explanation column (depends on question type)
             if ($questionType === 'multiple_choice') {
@@ -505,7 +504,7 @@ class SubjectController extends Controller
 
         if ($imported > 0) {
             return redirect()->route('admin.subjects.show', $subject)
-                ->with('success', "Successfully imported {$imported} question(s).")
+                ->with('success-toast', "Successfully imported {$imported} question(s).")
                 ->with('import_errors', $errors);
         } else {
             return redirect()->route('admin.subjects.show', $subject)
@@ -565,7 +564,7 @@ class SubjectController extends Controller
      * Parse DOCX file.
      * Supports both table format and narrative text format.
      */
-    private function parseDocx($file): array
+    private function parseDocx($file, $examType = 'JAMB'): array
     {
         $rows = [];
         
@@ -605,9 +604,9 @@ class SubjectController extends Controller
                 }
             }
 
-            // If no tables found or tables are empty, parse narrative text format
+            // If no tables found or tables are empty, parse narrative text format  
             if ((!$hasTables || empty($rows)) && !empty($fullText)) {
-                $parsedRows = $this->parseNarrativeFormat($fullText);
+                $parsedRows = $this->parseNarrativeFormat($fullText, $examType);
                 if (!empty($parsedRows)) {
                     $rows = $parsedRows;
                 }
@@ -659,7 +658,7 @@ class SubjectController extends Controller
     /**
      * Parse narrative text format (Question 1: ... a) ... b) ... Answer: c).
      */
-    private function parseNarrativeFormat($text): array
+    private function parseNarrativeFormat($text, $examType = 'JAMB'): array
     {
         $rows = [];
         
@@ -689,7 +688,7 @@ class SubjectController extends Controller
             if (preg_match('/^Question\s+\d+[:\-]?\s*(.*)$/i', $line, $matches)) {
                 // Save previous question if exists
                 if ($currentQuestion !== null && !empty($currentOptions) && $currentAnswer !== null) {
-                    $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer);
+                    $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer, $examType);
                 }
                 
                 // Start new question
@@ -725,7 +724,7 @@ class SubjectController extends Controller
         
         // Don't forget the last question
         if ($currentQuestion !== null && !empty($currentOptions) && $currentAnswer !== null) {
-            $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer);
+            $rows[] = $this->buildQuestionRow($currentQuestion, $currentOptions, $currentAnswer, $examType);
         }
         
         return $rows;
@@ -734,7 +733,7 @@ class SubjectController extends Controller
     /**
      * Build a question row in the expected format for multiple choice.
      */
-    private function buildQuestionRow($questionText, $options, $correctAnswer): array
+    private function buildQuestionRow($questionText, $options, $correctAnswer, $examType = 'JAMB'): array
     {
         // Format: [Question Text, Answer A, Answer B, Answer C, Answer D, Answer E (optional), Correct Answer, Explanation, Exam Types]
         $row = [
@@ -746,7 +745,7 @@ class SubjectController extends Controller
             $options['E'] ?? '',
             $correctAnswer,
             '', // Explanation (empty by default)
-            'JAMB,DLI', // Default exam types - can be overridden if needed
+            $examType, // Use the selected exam type
         ];
         
         return $row;

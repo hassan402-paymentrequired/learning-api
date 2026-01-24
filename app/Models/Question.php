@@ -16,6 +16,7 @@ class Question extends Model
         'subject_id',
         'exam_types',
         'question_text',
+        'image',
         'question_type',
         'explanation',
         'expected_answer',

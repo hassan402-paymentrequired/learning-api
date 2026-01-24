@@ -7,6 +7,7 @@ use App\Models\Subject;
 use App\Models\Question;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class QuestionController extends Controller
@@ -138,9 +139,16 @@ class QuestionController extends Controller
                 'validated' => $validated,
             ]);
 
+            // Handle image upload
+            $imagePath = null;
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('questions', 'public');
+            }
+
             $question = Question::create([
                 'subject_id' => $validated['subject_id'],
                 'question_text' => $validated['question_text'],
+                'image' => $imagePath,
                 'question_type' => $validated['question_type'],
                 'explanation' => $validated['explanation'] ?? null,
                 'expected_answer' => $validated['expected_answer'] ?? null,
@@ -183,6 +191,24 @@ class QuestionController extends Controller
     }
 
     /**
+     * Show the specified question (for viewing in modal).
+     */
+    public function show(Question $question)
+    {
+        $question->load('answers', 'subject', 'exam');
+
+        // Ensure exam_types is an array
+        if (!$question->exam_types || !is_array($question->exam_types)) {
+            $question->exam_types = [];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $question,
+        ]);
+    }
+
+    /**
      * Show the form for editing the specified question (standalone).
      */
     public function edit(Question $question)
@@ -211,6 +237,8 @@ class QuestionController extends Controller
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
         ]);
 
+       
+
         // Base validation rules
         $rules = [
             'subject_id' => 'required|exists:subjects,id',
@@ -236,6 +264,19 @@ class QuestionController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($question->image) {
+                Storage::disk('public')->delete($question->image);
+            }
+            $imagePath = $request->file('image')->store('questions', 'public');
+            $validated['image'] = $imagePath;
+        } else {
+            // Keep existing image if no new image uploaded
+            $validated['image'] = $question->image;
+        }
 
         // Conditional validation
         if ($validated['question_type'] === 'multiple_choice') {
@@ -274,6 +315,7 @@ class QuestionController extends Controller
             'explanation' => $validated['explanation'] ?? null,
             'expected_answer' => $validated['expected_answer'] ?? null,
             'exam_types' => $validated['exam_types'],
+            'image' => $validated['image'],
         ]);
 
         if ($validated['question_type'] === 'multiple_choice') {
@@ -308,7 +350,7 @@ class QuestionController extends Controller
         }
 
         return redirect()->route('admin.questions.index')
-            ->with('success', 'Question updated successfully.');
+            ->with('success-toast', 'Question updated successfully.');
     }
 
     /**
@@ -332,7 +374,7 @@ class QuestionController extends Controller
         $question->delete();
 
         return redirect()->route('admin.questions.index')
-            ->with('success', 'Question deleted successfully.');
+            ->with('success-toast', 'Question deleted successfully.');
     }
 
     /**

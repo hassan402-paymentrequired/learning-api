@@ -45,6 +45,7 @@ export default function CreateQuestion({ subjects }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         subject_id: '',
         question_text: '',
+        image: null as File | null,
         question_type: 'multiple_choice' as
             | 'multiple_choice'
             | 'text_input'
@@ -116,6 +117,7 @@ export default function CreateQuestion({ subjects }: Props) {
         e.preventDefault();
         
         post('/admin/questions', {
+            forceFormData: !!data.image,
             transform: (formData) => {
                 // Create a new object without answers for non-multiple_choice questions
                 if (formData.question_type !== 'multiple_choice') {
@@ -231,6 +233,34 @@ export default function CreateQuestion({ subjects }: Props) {
                                     required
                                 />
                                 <InputError message={errors.question_text} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="image">
+                                    Question Image (Optional)
+                                </Label>
+                                <Input
+                                    id="image"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0] || null;
+                                        setData('image', file);
+                                    }}
+                                />
+                                <p className="text-sm text-muted-foreground">
+                                    Upload an image or diagram for this question (e.g., math diagrams, charts)
+                                </p>
+                                {data.image && (
+                                    <div className="mt-2">
+                                        <img
+                                            src={URL.createObjectURL(data.image)}
+                                            alt="Preview"
+                                            className="max-w-xs h-auto rounded-lg border border-border"
+                                        />
+                                    </div>
+                                )}
+                                <InputError message={errors.image} />
                             </div>
 
                             <div className="grid gap-2">
