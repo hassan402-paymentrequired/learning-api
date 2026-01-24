@@ -64,6 +64,11 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
 
     // Exam attempt routes
     Route::post('/exams/{exam}/start', [ExamAttemptController::class, 'start']);
+    Route::post('/practice/start', [ExamAttemptController::class, 'startPracticeSession']);
+    
+    // Security violation logging
+    Route::post('/security/violations', [App\Http\Controllers\Api\SecurityController::class, 'logViolation']);
+    Route::get('/security/violations/status', [App\Http\Controllers\Api\SecurityController::class, 'getViolationStatus']);
     Route::post('/exam-attempts/{attempt}/submit-answer', [ExamAttemptController::class, 'submitAnswer']);
     Route::post('/exam-attempts/{attempt}/complete', [ExamAttemptController::class, 'complete']);
     Route::get('/exam-attempts', [ExamAttemptController::class, 'index']);

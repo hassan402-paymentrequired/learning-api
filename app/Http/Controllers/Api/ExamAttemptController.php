@@ -8,6 +8,7 @@ use App\Models\ExamAttempt;
 use App\Models\Question;
 use App\Models\UserAnswer;
 use App\Models\UserStreak;
+use App\Models\Subject;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -72,6 +73,90 @@ class ExamAttemptController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Exam started successfully',
+            'data' => [
+                'attempt' => $attempt->load('exam'),
+            ],
+        ], 201);
+    }
+
+    /**
+     * Start a new practice session.
+     * This creates an exam attempt for practice questions without requiring a specific exam.
+     */
+    public function startPracticeSession(Request $request)
+    {
+        $request->validate([
+            'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'subjects' => 'required|array|min:1',
+            'subjects.*.subject' => 'required|string',
+            'subjects.*.question_count' => 'required|integer|min:1|max:100',
+            'duration_minutes' => 'required|integer|min:1|max:300',
+        ]);
+
+        $examType = $request->input('exam_type');
+        $subjects = $request->input('subjects');
+        $durationMinutes = $request->input('duration_minutes');
+        
+        // Calculate total questions
+        $totalQuestions = collect($subjects)->sum('question_count');
+        
+        // Try to find an existing exam for this exam type, or create a virtual one
+        $exam = Exam::where('exam_type', $examType)->where('is_active', true)->first();
+        
+        if (!$exam) {
+            // Create a virtual/temporary exam record for practice sessions
+            $exam = Exam::firstOrCreate(
+                [
+                    'title' => "{$examType} Practice Session",
+                    'exam_type' => $examType,
+                    'subject' => null, // Multi-subject practice
+                    'year' => null,
+                ],
+                [
+                    'description' => "Practice session for {$examType} questions",
+                    'total_questions' => $totalQuestions,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        // Check if user has an in-progress practice attempt
+        $existingAttempt = ExamAttempt::where('user_id', auth()->id())
+            ->where('exam_id', $exam->id)
+            ->where('status', 'in_progress')
+            ->where('created_at', '>', now()->subHours(6)) // Only check recent attempts
+            ->first();
+
+        if ($existingAttempt) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Resuming existing practice session',
+                'data' => [
+                    'attempt' => $existingAttempt->load('exam'),
+                ],
+            ]);
+        }
+
+        // Create new practice attempt
+        $attemptData = [
+            'user_id' => auth()->id(),
+            'exam_id' => $exam->id,
+            'status' => 'in_progress',
+            'started_at' => now(),
+            'duration_minutes' => $durationMinutes,
+            'total_questions' => $totalQuestions,
+        ];
+
+        // Add subjects data if provided (for multi-subject tracking)
+        if ($subjects) {
+            $attemptData['subjects_data'] = $subjects;
+        }
+
+        $attempt = ExamAttempt::create($attemptData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Practice session started successfully',
             'data' => [
                 'attempt' => $attempt->load('exam'),
             ],

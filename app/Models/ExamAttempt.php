@@ -22,6 +22,7 @@ class ExamAttempt extends Model
         'correct_answers',
         'status',
         'subjects',
+        'subjects_data',
         'duration_minutes',
     ];
 
@@ -33,6 +34,7 @@ class ExamAttempt extends Model
         'total_questions' => 'integer',
         'correct_answers' => 'integer',
         'subjects' => 'array',
+        'subjects_data' => 'array',
         'duration_minutes' => 'integer',
     ];
 
