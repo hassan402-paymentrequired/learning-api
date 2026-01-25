@@ -26,6 +26,12 @@ class LeaderboardController extends Controller
         $limit = $request->input('limit', 50);
         $currentUser = auth()->user();
 
+        // Special handling for home page top performers (limit = 10, no exam_type)
+        // Return 10 recent users who took practice and got about 70% or above
+        if ($limit === 10 && !$examType && $type === 'all_time') {
+            return $this->getTopPerformersForHome();
+        }
+
         // Build query based on time period
         $query = ExamAttempt::select(
                 'user_id',
@@ -250,6 +256,74 @@ class LeaderboardController extends Controller
                         ? round(($userStatsResult->total_correct / $userStatsResult->total_questions) * 100, 2) 
                         : 0,
                 ],
+            ],
+        ]);
+    }
+
+    /**
+     * Get top performers for home page.
+     * Returns 10 recent users who took practice sessions and scored about 70% or above.
+     */
+    private function getTopPerformersForHome()
+    {
+        // Get practice sessions (exams with "Practice Session" in title)
+        $practiceAttempts = ExamAttempt::where('status', 'completed')
+            ->whereHas('exam', function ($q) {
+                $q->where('title', 'LIKE', '%Practice Session%');
+            })
+            ->with(['user:id,name,email', 'exam:id,title,exam_type'])
+            ->orderBy('completed_at', 'desc')
+            ->get();
+
+        // Filter for users who scored 70% or above and get unique users
+        $topPerformers = [];
+        $seenUserIds = [];
+
+        foreach ($practiceAttempts as $attempt) {
+            // Skip if we've already seen this user
+            if (in_array($attempt->user_id, $seenUserIds)) {
+                continue;
+            }
+
+            // Calculate percentage score using the model's percentage attribute
+            $percentage = $attempt->percentage;
+
+            // Only include users who scored 70% or above
+            if ($percentage >= 70) {
+                $seenUserIds[] = $attempt->user_id;
+                
+                $topPerformers[] = [
+                    'rank' => count($topPerformers) + 1,
+                    'user' => [
+                        'id' => $attempt->user->id,
+                        'name' => $attempt->user->name,
+                        'email' => $attempt->user->email,
+                    ],
+                    'statistics' => [
+                        'total_score' => (int) $attempt->score,
+                        'total_attempts' => 1,
+                        'average_score' => round((float) $attempt->score, 2),
+                        'highest_score' => (int) $attempt->score,
+                        'total_correct' => (int) $attempt->correct_answers,
+                        'total_questions' => (int) $attempt->total_questions,
+                        'accuracy' => $percentage,
+                    ],
+                ];
+
+                // Stop when we have 10 users
+                if (count($topPerformers) >= 10) {
+                    break;
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'type' => 'all_time',
+                'exam_type' => null,
+                'leaderboard' => $topPerformers,
+                'current_user' => null,
             ],
         ]);
     }

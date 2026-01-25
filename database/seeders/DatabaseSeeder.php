@@ -24,7 +24,7 @@ class DatabaseSeeder extends Seeder
                 'is_admin' => true,
             ]
         );
-        
+
 
         User::firstOrCreate(
             ['email' => 'hassan@stepra.com'],
@@ -36,6 +36,6 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        
+
     }
 }
