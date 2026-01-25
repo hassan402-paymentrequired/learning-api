@@ -5,23 +5,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { Form, Head, useForm } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
 import admin from '@/routes/admin';
+
+interface Subject {
+    id: number;
+    name: string;
+}
+
+interface Props {
+    subjects: Subject[];
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Exams', href: admin.exams.index().url },
     { title: 'Create Exam', href: '#' },
 ];
 
-export default function CreateExam() {
+export default function CreateExam({ subjects }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         title: '',
-        description: '',
-        exam_type: 'JAMB' as 'JAMB' | 'UNILAG' | 'DLI' | 'GENERAL',
-        subject: '',
+        subject_id: '',
         year: null as number | null,
         is_active: true,
     });
@@ -52,84 +58,63 @@ export default function CreateExam() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Exam Details</CardTitle>
-                        <CardDescription>Fill in the information for the new exam</CardDescription>
+                        <CardDescription>Fill in the information for the new JAMB past question exam</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Form onSubmit={submit} className="space-y-6">
+                        <form onSubmit={submit} className="space-y-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="title">Title *</Label>
+                                <Label htmlFor="title">Title</Label>
                                 <Input
                                     id="title"
                                     value={data.title}
                                     onChange={(e) => setData('title', e.target.value)}
-                                    placeholder="e.g., JAMB Mathematics 2024"
-                                    required
+                                    placeholder="e.g., JAMB Mathematics 2024 (optional - will auto-generate)"
                                 />
                                 <InputError message={errors.title} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea
-                                    id="description"
-                                    value={data.description}
-                                    onChange={(e) => setData('description', e.target.value)}
-                                    placeholder="Brief description of the exam"
-                                    rows={3}
-                                />
-                                <InputError message={errors.description} />
+                                <p className="text-xs text-muted-foreground">
+                                    Title will be auto-generated if left empty based on subject and year
+                                </p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="exam_type">Exam Type *</Label>
+                                    <Label htmlFor="subject_id">Subject/Course *</Label>
                                     <Select
-                                        value={data.exam_type}
-                                        onValueChange={(value: 'JAMB' | 'UNILAG' | 'DLI' | 'GENERAL') => setData('exam_type', value)}
+                                        value={data.subject_id}
+                                        onValueChange={(value) => setData('subject_id', value)}
+                                        required
                                     >
                                         <SelectTrigger>
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select a subject" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="JAMB">JAMB</SelectItem>
-                                            <SelectItem value="UNILAG">UNILAG</SelectItem>
-                                            <SelectItem value="DLI">DLI (Distance Learning Institute)</SelectItem>
-                                            <SelectItem value="GENERAL">GENERAL</SelectItem>
+                                            {subjects.map((subject) => (
+                                                <SelectItem key={subject.id} value={subject.id.toString()}>
+                                                    {subject.name}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
-                                    <InputError message={errors.exam_type} />
+                                    <InputError message={errors.subject_id} />
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="subject">Subject</Label>
+                                    <Label htmlFor="year">Year *</Label>
                                     <Input
-                                        id="subject"
-                                        value={data.subject}
-                                        onChange={(e) => setData('subject', e.target.value)}
-                                        placeholder="e.g., Mathematics"
+                                        id="year"
+                                        type="number"
+                                        min="2000"
+                                        max={new Date().getFullYear() + 1}
+                                        value={data.year || ''}
+                                        onChange={(e) => setData('year', e.target.value ? parseInt(e.target.value) : null)}
+                                        placeholder="e.g., 2024"
+                                        required
                                     />
-                                    <InputError message={errors.subject} />
+                                    <InputError message={errors.year} />
                                     <p className="text-xs text-muted-foreground">
-                                        Optional: Subject/course for this past question exam
+                                        Only one past question exam per subject per year
                                     </p>
                                 </div>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="year">Year</Label>
-                                <Input
-                                    id="year"
-                                    type="number"
-                                    min="2000"
-                                    max={new Date().getFullYear() + 1}
-                                    value={data.year || ''}
-                                    onChange={(e) => setData('year', e.target.value ? parseInt(e.target.value) : null)}
-                                    placeholder="e.g., 2024"
-                                />
-                                <InputError message={errors.year} />
-                                <p className="text-xs text-muted-foreground">
-                                    Year for this past question exam
-                                </p>
                             </div>
 
                             <div className="flex items-center space-x-2">
@@ -155,7 +140,7 @@ export default function CreateExam() {
                                     <a href={admin.exams.index().url}>Cancel</a>
                                 </Button>
                             </div>
-                        </Form>
+                        </form>
                     </CardContent>
                 </Card>
             </div>

@@ -400,7 +400,6 @@ class ExamAttemptController extends Controller
                         'id' => $question->id,
                         'question_text' => $question->question_text,
                         'explanation' => $question->explanation,
-                        'points' => $question->points,
                     ],
                     'user_answer' => $userAnswer->answer ? [
                         'id' => $userAnswer->answer->id,

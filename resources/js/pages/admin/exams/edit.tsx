@@ -5,43 +5,46 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { Form, Head, useForm } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
+import admin from '@/routes/admin';
 
 interface Exam {
     id: number;
     title: string;
-    description: string | null;
-    exam_type: 'JAMB' | 'DLI' | 'UNILAG' | 'GENERAL';
     subject: string | null;
     year: number | null;
     is_active: boolean;
 }
 
+interface Subject {
+    id: number;
+    name: string;
+}
+
 interface Props {
     exam: Exam;
+    subjects: Subject[];
+    current_subject_id?: number | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Exams', href: route('admin.exams.index').url },
+    { title: 'Exams', href: admin.exams.index().url },
     { title: 'Edit Exam', href: '#' },
 ];
 
-export default function EditExam({ exam }: Props) {
-    const { data, setData, put, processing, errors } = useForm({
+export default function EditExam({ exam, subjects, current_subject_id }: Props) {
+    const { data, setData, patch, processing, errors } = useForm({
         title: exam.title,
-        description: exam.description || '',
-        exam_type: exam.exam_type as 'JAMB' | 'UNILAG' | 'DLI' | 'GENERAL',
-        subject: exam.subject || '',
+        subject_id: current_subject_id?.toString() || '',
         year: exam.year,
         is_active: exam.is_active,
     });
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(route('admin.exams.update', exam.id));
+        patch(admin.exams.update(exam.id).url);
     };
 
     return (
@@ -70,14 +73,17 @@ export default function EditExam({ exam }: Props) {
                     <CardContent>
                         <Form onSubmit={submit} className="space-y-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="title">Title *</Label>
+                                <Label htmlFor="title">Title</Label>
                                 <Input
                                     id="title"
                                     value={data.title}
                                     onChange={(e) => setData('title', e.target.value)}
-                                    required
+                                    placeholder="e.g., JAMB Mathematics 2024 (optional - will auto-generate)"
                                 />
                                 <InputError message={errors.title} />
+                                <p className="text-xs text-muted-foreground">
+                                    Title will be auto-generated if left empty based on subject and year
+                                </p>
                             </div>
 
                             <div className="grid gap-2">
@@ -163,7 +169,7 @@ export default function EditExam({ exam }: Props) {
                                     variant="outline"
                                     asChild
                                 >
-                                    <a href={route('admin.exams.show', exam.id)}>Cancel</a>
+                                    <a href={admin.exams.show(exam.id).url}>Cancel</a>
                                 </Button>
                             </div>
                         </Form>

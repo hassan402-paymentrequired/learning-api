@@ -42,6 +42,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{exam}', [App\Http\Controllers\Admin\ExamController::class, 'destroy'])->name('destroy');
             Route::post('/{exam}/duplicate', [App\Http\Controllers\Admin\ExamController::class, 'duplicate'])->name('duplicate');
             Route::post('/bulk-update', [App\Http\Controllers\Admin\ExamController::class, 'bulkUpdate'])->name('bulk-update');
+
+            // Exam Questions routes
+            Route::prefix('{exam}/questions')->name('questions.')->group(function () {
+                Route::get('/create', [App\Http\Controllers\Admin\ExamQuestionController::class, 'create'])->name('create');
+                Route::post('/', [App\Http\Controllers\Admin\ExamQuestionController::class, 'store'])->name('store');
+                Route::get('/{question}/edit', [App\Http\Controllers\Admin\ExamQuestionController::class, 'edit'])->name('edit');
+                Route::patch('/{question}', [App\Http\Controllers\Admin\ExamQuestionController::class, 'update'])->name('update');
+                Route::delete('/{question}', [App\Http\Controllers\Admin\ExamQuestionController::class, 'destroy'])->name('destroy');
+                Route::get('/sample', [App\Http\Controllers\Admin\ExamQuestionController::class, 'downloadSample'])->name('sample');
+                Route::post('/bulk-upload', [App\Http\Controllers\Admin\ExamQuestionController::class, 'bulkUpload'])->name('bulkUpload');
+            });
         });
 
         // Questions routes

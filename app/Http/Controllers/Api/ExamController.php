@@ -80,15 +80,45 @@ class ExamController extends Controller
                 $query->select('id', 'question_id', 'answer_text', 'order')
                     ->orderBy('order');
             }])
-            ->orderBy('order')
+            ->orderBy('id')
             ->get()
-            ->map(function ($question) {
+            ->map(function ($question, $index) {
+                // For true/false questions, create answer records if they don't exist
+                if ($question->question_type === 'true_false' && $question->answers->isEmpty()) {
+                    // Create answer records for true/false questions
+                    $expectedAnswer = strtolower(trim($question->expected_answer ?? ''));
+                    $trueAnswer = $question->answers()->firstOrCreate(
+                        [
+                            'question_id' => $question->id,
+                            'answer_text' => 'True',
+                        ],
+                        [
+                            'order' => 'A',
+                            'is_correct' => $expectedAnswer === 'true',
+                        ]
+                    );
+                    
+                    $falseAnswer = $question->answers()->firstOrCreate(
+                        [
+                            'question_id' => $question->id,
+                            'answer_text' => 'False',
+                        ],
+                        [
+                            'order' => 'B',
+                            'is_correct' => $expectedAnswer === 'false',
+                        ]
+                    );
+                    
+                    // Reload answers
+                    $question->load('answers');
+                }
+                
                 return [
                     'id' => $question->id,
                     'question_text' => $question->question_text,
                     'question_type' => $question->question_type,
-                    'points' => $question->points,
-                    'order' => $question->order,
+                    'image' => $question->image,
+                    'order' => $index + 1, // Use index-based ordering
                     'answers' => $question->answers->map(function ($answer) {
                         return [
                             'id' => $answer->id,
@@ -211,12 +241,42 @@ class ExamController extends Controller
             }])
             ->get()
             ->map(function ($question, $index) {
+                // For true/false questions, create answer records if they don't exist
+                if ($question->question_type === 'true_false' && $question->answers->isEmpty()) {
+                    // Create answer records for true/false questions
+                    $expectedAnswer = strtolower(trim($question->expected_answer ?? ''));
+                    $trueAnswer = $question->answers()->firstOrCreate(
+                        [
+                            'question_id' => $question->id,
+                            'answer_text' => 'True',
+                        ],
+                        [
+                            'order' => 'A',
+                            'is_correct' => $expectedAnswer === 'true',
+                        ]
+                    );
+                    
+                    $falseAnswer = $question->answers()->firstOrCreate(
+                        [
+                            'question_id' => $question->id,
+                            'answer_text' => 'False',
+                        ],
+                        [
+                            'order' => 'B',
+                            'is_correct' => $expectedAnswer === 'false',
+                        ]
+                    );
+                    
+                    // Reload answers
+                    $question->load('answers');
+                }
+                
                 return [
                     'id' => $question->id,
                     'question_text' => $question->question_text,
                     'question_type' => $question->question_type,
-                    'points' => $question->points,
-                    'order' => $index + 1, // Reorder from 1
+                    'image' => $question->image,
+                    'order' => $index + 1, // Use index-based ordering
                     'answers' => $question->answers->map(function ($answer) {
                         return [
                             'id' => $answer->id,

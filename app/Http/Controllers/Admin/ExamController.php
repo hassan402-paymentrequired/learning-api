@@ -39,7 +39,14 @@ class ExamController extends Controller
      */
     public function create()
     {
-        return Inertia::render('admin/exams/create');
+        $subjects = \App\Models\Subject::where('is_active', true)
+            ->whereJsonContains('exam_types', 'JAMB')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return Inertia::render('admin/exams/create', [
+            'subjects' => $subjects,
+        ]);
     }
 
     /**
@@ -48,18 +55,40 @@ class ExamController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'exam_type' => 'required|in:JAMB,UNILAG,DLI,GENERAL',
-            'subject' => 'nullable|string|max:255',
-            'year' => 'nullable|integer|min:2000|max:' . (date('Y') + 1),
+            'title' => 'nullable|string|max:255',
+            'subject_id' => 'required|exists:subjects,id',
+            'year' => 'required|integer|min:2000|max:' . (date('Y') + 1),
             'is_active' => 'boolean',
         ]);
 
-        $exam = Exam::create($validated);
+        // Get subject name from subject_id
+        $subject = \App\Models\Subject::findOrFail($validated['subject_id']);
+        
+        // Check if exam already exists for this subject and year
+        $existingExam = Exam::where('exam_type', 'JAMB')
+            ->where('subject', $subject->name)
+            ->where('year', $validated['year'])
+            ->first();
+
+        if ($existingExam) {
+            return back()->withErrors([
+                'year' => 'A past question exam already exists for ' . $subject->name . ' in ' . $validated['year'] . '.',
+            ]);
+        }
+
+        // Auto-generate title if empty
+        $title = $validated['title'] ?: "JAMB {$subject->name} {$validated['year']}";
+
+        $exam = Exam::create([
+            'title' => $title,
+            'exam_type' => 'JAMB', 
+            'subject' => $subject->name,
+            'year' => $validated['year'],
+            'is_active' => $validated['is_active'] ?? true,
+        ]);
 
         return redirect()->route('admin.exams.show', $exam)
-            ->with('success', 'Exam created successfully.');
+            ->with('success-toast', 'Exam created successfully.');
     }
 
     /**
@@ -80,8 +109,21 @@ class ExamController extends Controller
      */
     public function edit(Exam $exam)
     {
+        $subjects = \App\Models\Subject::where('is_active', true)
+            ->whereJsonContains('exam_types', 'JAMB')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        // Find the subject ID for the current exam's subject
+        $currentSubject = null;
+        if ($exam->subject) {
+            $currentSubject = \App\Models\Subject::where('name', $exam->subject)->first();
+        }
+
         return Inertia::render('admin/exams/edit', [
             'exam' => $exam,
+            'subjects' => $subjects,
+            'current_subject_id' => $currentSubject?->id,
         ]);
     }
 
@@ -91,15 +133,38 @@ class ExamController extends Controller
     public function update(Request $request, Exam $exam)
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'exam_type' => 'required|in:JAMB,UNILAG,DLI,GENERAL',
-            'subject' => 'nullable|string|max:255',
-            'year' => 'nullable|integer|min:2000|max:' . (date('Y') + 1),
+            'title' => 'nullable|string|max:255',
+            'subject_id' => 'required|exists:subjects,id',
+            'year' => 'required|integer|min:2000|max:' . (date('Y') + 1),
             'is_active' => 'boolean',
         ]);
 
-        $exam->update($validated);
+        // Get subject name from subject_id
+        $subject = \App\Models\Subject::findOrFail($validated['subject_id']);
+        
+        // Check if another exam already exists for this subject and year (excluding current exam)
+        $existingExam = Exam::where('exam_type', 'JAMB')
+            ->where('subject', $subject->name)
+            ->where('year', $validated['year'])
+            ->where('id', '!=', $exam->id)
+            ->first();
+
+        if ($existingExam) {
+            return back()->withErrors([
+                'year' => 'A past question exam already exists for ' . $subject->name . ' in ' . $validated['year'] . '.',
+            ]);
+        }
+
+        // Auto-generate title if empty
+        $title = $validated['title'] ?: "JAMB {$subject->name} {$validated['year']}";
+
+        $exam->update([
+            'title' => $title,
+            'exam_type' => 'JAMB', // Always JAMB for past questions
+            'subject' => $subject->name,
+            'year' => $validated['year'],
+            'is_active' => $validated['is_active'] ?? $exam->is_active,
+        ]);
 
         return redirect()->route('admin.exams.show', $exam)
             ->with('success', 'Exam updated successfully.');
