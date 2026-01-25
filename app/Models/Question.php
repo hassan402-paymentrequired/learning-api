@@ -54,9 +54,36 @@ class Question extends Model
 
     /**
      * Get the correct answer for the question.
+     * For text_input and numeric_input, returns an answer record with expected_answer if it exists.
      */
     public function correctAnswer()
     {
+        // For text_input and numeric_input, check if there's an answer with expected_answer
+        if (in_array($this->question_type, ['text_input', 'numeric_input'])) {
+            if ($this->expected_answer) {
+                // Try to find an answer record that matches expected_answer
+                $answer = $this->answers()
+                    ->where('answer_text', $this->expected_answer)
+                    ->where('is_correct', true)
+                    ->first();
+                
+                if ($answer) {
+                    return $answer;
+                }
+                
+                // If no answer record exists, create a virtual answer object
+                // This is a fallback - ideally answers should be created
+                return (object)[
+                    'id' => null,
+                    'answer_text' => $this->expected_answer,
+                    'is_correct' => true,
+                    'order' => null,
+                ];
+            }
+            return null;
+        }
+        
+        // For multiple_choice and true_false, return the answer marked as correct
         return $this->answers()->where('is_correct', true)->first();
     }
 }

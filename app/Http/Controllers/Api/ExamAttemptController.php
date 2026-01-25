@@ -184,24 +184,78 @@ class ExamAttemptController extends Controller
 
         $request->validate([
             'question_id' => 'required|exists:questions,id',
-            'answer_id' => 'required|exists:answers,id',
+            'answer_id' => 'nullable|exists:answers,id',
+            'answer_text' => 'nullable|string',
             'time_spent' => 'nullable|integer|min:0',
         ]);
 
         $question = Question::findOrFail($request->question_id);
-        $answer = $question->answers()->findOrFail($request->answer_id);
+        
+        // Handle different question types
+        if (in_array($question->question_type, ['text_input', 'numeric_input'])) {
+            // For text/numeric input, we need answer_text
+            if (!$request->has('answer_text') || empty($request->answer_text)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Answer text is required for text/numeric input questions',
+                ], 400);
+            }
+            
+            $userAnswerText = trim($request->answer_text);
+            $expectedAnswer = trim($question->expected_answer ?? '');
+            
+            // Check if correct by comparing with expected_answer
+            // For text input, do case-insensitive comparison
+            // For numeric input, compare as numbers
+            $isCorrect = false;
+            if ($question->question_type === 'numeric_input') {
+                // Numeric comparison
+                $userNum = is_numeric($userAnswerText) ? (float)$userAnswerText : null;
+                $expectedNum = is_numeric($expectedAnswer) ? (float)$expectedAnswer : null;
+                $isCorrect = $userNum !== null && $expectedNum !== null && abs($userNum - $expectedNum) < 0.0001;
+            } else {
+                // Text comparison (case-insensitive, trimmed)
+                $isCorrect = strtolower($userAnswerText) === strtolower($expectedAnswer);
+            }
+            
+            // Find or create an answer record for this text
+            $answer = $question->answers()->firstOrCreate(
+                [
+                    'answer_text' => $userAnswerText,
+                ],
+                [
+                    'is_correct' => $isCorrect,
+                    'order' => 'A',
+                ]
+            );
+            
+            // If answer already existed, update is_correct based on expected_answer
+            if (!$answer->wasRecentlyCreated) {
+                $answer->update(['is_correct' => $isCorrect]);
+            }
+        } else {
+            // For multiple_choice and true_false, we need answer_id
+            if (!$request->has('answer_id')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Answer ID is required for multiple choice and true/false questions',
+                ], 400);
+            }
+            
+            $answer = $question->answers()->findOrFail($request->answer_id);
+        }
 
         // Check if answer already exists for this question
-        $existingAnswer = UserAnswer::where('exam_attempt_id', $attempt->id)
+        $existingUserAnswer = UserAnswer::where('exam_attempt_id', $attempt->id)
             ->where('question_id', $question->id)
             ->first();
 
-        if ($existingAnswer) {
+        if ($existingUserAnswer) {
             // Update existing answer
-            $existingAnswer->update([
+            $existingUserAnswer->update([
                 'answer_id' => $answer->id,
                 'is_correct' => $answer->is_correct,
-                'time_spent' => $request->time_spent ?? $existingAnswer->time_spent,
+                'time_spent' => $request->time_spent ?? $existingUserAnswer->time_spent,
             ]);
         } else {
             // Create new answer
@@ -395,22 +449,44 @@ class ExamAttemptController extends Controller
                 $question = $userAnswer->question;
                 $correctAnswer = $question->correctAnswer();
 
+                // For text_input and numeric_input, get expected_answer as correct answer
+                $correctAnswerData = null;
+                if (in_array($question->question_type, ['text_input', 'numeric_input'])) {
+                    if ($question->expected_answer) {
+                        $correctAnswerData = [
+                            'id' => null,
+                            'answer_text' => $question->expected_answer,
+                            'order' => null,
+                        ];
+                    }
+                } else if ($correctAnswer) {
+                    $correctAnswerData = [
+                        'id' => $correctAnswer->id,
+                        'answer_text' => $correctAnswer->answer_text,
+                        'order' => $correctAnswer->order,
+                    ];
+                }
+
+                // User answer data
+                $userAnswerData = null;
+                if ($userAnswer->answer) {
+                    $userAnswerData = [
+                        'id' => $userAnswer->answer->id,
+                        'answer_text' => $userAnswer->answer->answer_text,
+                        'order' => $userAnswer->answer->order ?? null,
+                    ];
+                }
+
                 return [
                     'question' => [
                         'id' => $question->id,
                         'question_text' => $question->question_text,
+                        'question_type' => $question->question_type,
                         'explanation' => $question->explanation,
+                        'expected_answer' => $question->expected_answer,
                     ],
-                    'user_answer' => $userAnswer->answer ? [
-                        'id' => $userAnswer->answer->id,
-                        'answer_text' => $userAnswer->answer->answer_text,
-                        'order' => $userAnswer->answer->order,
-                    ] : null,
-                    'correct_answer' => $correctAnswer ? [
-                        'id' => $correctAnswer->id,
-                        'answer_text' => $correctAnswer->answer_text,
-                        'order' => $correctAnswer->order,
-                    ] : null,
+                    'user_answer' => $userAnswerData,
+                    'correct_answer' => $correctAnswerData,
                     'is_correct' => $userAnswer->is_correct,
                     'time_spent' => $userAnswer->time_spent,
                 ];
