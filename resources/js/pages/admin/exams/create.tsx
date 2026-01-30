@@ -40,7 +40,7 @@ export default function CreateExam({ subjects }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Exam" />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 overflow-x-hidden">
                 <div>
                     <h1 className="text-2xl font-bold">Create Exam</h1>
                     <p className="text-muted-foreground">Add a new past question exam</p>
@@ -76,7 +76,7 @@ export default function CreateExam({ subjects }: Props) {
                                 </p>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="subject_id">Subject/Course *</Label>
                                     <Select
@@ -128,14 +128,15 @@ export default function CreateExam({ subjects }: Props) {
                                 </Label>
                             </div>
 
-                            <div className="flex gap-2">
-                                <Button type="submit" disabled={processing}>
+                            <div className="flex flex-col-reverse sm:flex-row flex-wrap gap-2">
+                                <Button type="submit" disabled={processing} className="w-full sm:w-auto">
                                     {processing ? 'Creating...' : 'Create Exam'}
                                 </Button>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     asChild
+                                    className="w-full sm:w-auto"
                                 >
                                     <a href={admin.exams.index().url}>Cancel</a>
                                 </Button>

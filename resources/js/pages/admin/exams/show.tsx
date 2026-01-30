@@ -141,17 +141,19 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={exam.title} />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold">{exam.title}</h1>
-                        <p className="text-muted-foreground">
+            <div className="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 overflow-x-hidden">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-xl sm:text-2xl font-bold break-words">{exam.title}</h1>
+                        <p className="text-sm sm:text-base text-muted-foreground mt-1">
                             {exam.description || 'No description'}
                         </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 shrink-0">
                         <Button
                             variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
                             onClick={() => {
                                 if (
                                     confirm(
@@ -173,13 +175,13 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                             <Copy className="mr-2 h-4 w-4" />
                             Duplicate
                         </Button>
-                        <Button variant="outline" asChild>
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
                             <Link href={admin.exams.edit(exam.id).url}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Exam
                             </Link>
                         </Button>
-                        <Button asChild>
+                        <Button size="sm" className="w-full sm:w-auto" asChild>
                             <Link
                                 href={admin.exams.questions.create(exam.id).url}
                             >
@@ -190,7 +192,7 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                     </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-sm font-medium">
@@ -251,9 +253,9 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                                <Download className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                <div className="flex-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                                <Download className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
+                                <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
                                         Need help with the format?
                                     </p>
@@ -266,6 +268,7 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                     variant="outline"
                                     size="sm"
                                     onClick={downloadSample}
+                                    className="w-full sm:w-auto shrink-0"
                                 >
                                     <Download className="mr-2 h-4 w-4" />
                                     Download Sample
@@ -463,11 +466,11 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                 </div>
                             ) : (
                                 exam.questions.map((question) => (
-                                    <Card key={question.id}>
+                                    <Card key={question.id} className="min-w-0 overflow-hidden">
                                         <CardHeader>
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <div className="mb-2 flex items-center gap-2">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="mb-2 flex flex-wrap items-center gap-2">
                                                         <Badge variant="outline">
                                                             Q{question.order}
                                                         </Badge>
@@ -480,15 +483,16 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                                                 : ''}
                                                         </Badge>
                                                     </div>
-                                                    <CardTitle className="text-base">
+                                                    <CardTitle className="text-sm sm:text-base break-words">
                                                         {question.question_text}
                                                     </CardTitle>
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 shrink-0">
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
                                                         asChild
+                                                        className="shrink-0"
                                                     >
                                                         <Link
                                                             href={
@@ -511,6 +515,7 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                                                 question.id,
                                                             )
                                                         }
+                                                        className="shrink-0"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -529,14 +534,14 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                                                     : 'border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/20'
                                                             }`}
                                                         >
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-medium">
+                                                            <div className="flex items-start sm:items-center gap-2 min-w-0">
+                                                                <span className="font-medium shrink-0">
                                                                     {
                                                                         answer.order
                                                                     }
                                                                     .
                                                                 </span>
-                                                                <span>
+                                                                <span className="break-words min-w-0 flex-1">
                                                                     {
                                                                         answer.answer_text
                                                                     }
@@ -544,7 +549,7 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                                                 {answer.is_correct && (
                                                                     <Badge
                                                                         variant="default"
-                                                                        className="ml-auto"
+                                                                        className="ml-auto shrink-0"
                                                                     >
                                                                         Correct
                                                                     </Badge>
@@ -554,8 +559,8 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                                     ),
                                                 )}
                                                 {question.explanation && (
-                                                    <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 dark:border-blue-800 dark:bg-blue-900/20">
-                                                        <p className="text-sm">
+                                                    <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 dark:border-blue-800 dark:bg-blue-900/20 min-w-0 overflow-hidden">
+                                                        <p className="text-sm break-words">
                                                             <strong>
                                                                 Explanation:
                                                             </strong>{' '}

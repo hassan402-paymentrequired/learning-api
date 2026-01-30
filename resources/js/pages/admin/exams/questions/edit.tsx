@@ -129,13 +129,13 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Edit Question - ${exam.title}`} />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div>
-                    <h1 className="text-2xl font-bold">Edit Question</h1>
-                    <p className="text-muted-foreground">
+            <div className="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 overflow-x-hidden">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold break-words">Edit Question</h1>
+                    <p className="text-sm sm:text-base text-muted-foreground">
                         Update question in <strong>{exam.title}</strong>
                     </p>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         Exam Type: <strong>{exam.exam_type}</strong>
                         {exam.subject && (
                             <> • Subject: <strong>{exam.subject}</strong></>
@@ -179,20 +179,20 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
                                     Upload an image or diagram for this question
                                 </p>
                                 {data.image ? (
-                                    <div className="mt-2">
+                                    <div className="mt-2 max-w-full overflow-hidden">
                                         <img
                                             src={URL.createObjectURL(data.image)}
                                             alt="Preview"
-                                            className="max-w-xs h-auto rounded-lg border border-border"
+                                            className="max-w-full max-h-48 sm:max-h-64 object-contain rounded-lg border border-border"
                                         />
                                     </div>
                                 ) : question.image ? (
-                                    <div className="mt-2">
+                                    <div className="mt-2 max-w-full overflow-hidden">
                                         <p className="text-sm text-muted-foreground mb-2">Current image:</p>
                                         <img
                                             src={question.image.startsWith('http') ? question.image : `/storage/${question.image}`}
                                             alt="Current question image"
-                                            className="max-w-xs h-auto rounded-lg border border-border"
+                                            className="max-w-full max-h-48 sm:max-h-64 object-contain h-auto rounded-lg border border-border"
                                             onError={(e) => {
                                                 (e.target as HTMLImageElement).style.display = 'none';
                                             }}
@@ -223,7 +223,7 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
 
                             {data.question_type === 'multiple_choice' ? (
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                         <Label>Answers *</Label>
                                         <Button
                                             type="button"
@@ -231,6 +231,7 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
                                             size="sm"
                                             onClick={addAnswer}
                                             disabled={data.answers.length >= 5}
+                                            className="w-full sm:w-auto"
                                         >
                                             <Plus className="mr-2 h-4 w-4" />
                                             Add Answer
@@ -238,35 +239,38 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
                                     </div>
 
                                     {data.answers.map((answer, index) => (
-                                        <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
+                                        <div key={index} className="flex items-start gap-2 sm:gap-3 p-3 border rounded-lg min-w-0">
                                             <Checkbox
                                                 id={`answer-${index}`}
                                                 checked={answer.is_correct}
                                                 onCheckedChange={() => setCorrectAnswer(index)}
-                                                className="mt-1"
+                                                className="mt-1 shrink-0"
                                             />
-                                            <div className="flex-1 space-y-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Label htmlFor={`answer-${index}`} className="font-medium">
+                                            <div className="flex-1 min-w-0 space-y-2">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                                    <Label htmlFor={`answer-${index}`} className="font-medium shrink-0">
                                                         {answer.order}.
                                                     </Label>
-                                                    <Input
-                                                        value={answer.answer_text}
-                                                        onChange={(e) => updateAnswer(index, 'answer_text', e.target.value)}
-                                                        placeholder={`Answer option ${answer.order}`}
-                                                        required
-                                                        className="flex-1"
-                                                    />
-                                                    {data.answers.length > 2 && (
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => removeAnswer(index)}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
+                                                    <div className="flex gap-2 flex-1 min-w-0">
+                                                        <Input
+                                                            value={answer.answer_text}
+                                                            onChange={(e) => updateAnswer(index, 'answer_text', e.target.value)}
+                                                            placeholder={`Answer option ${answer.order}`}
+                                                            required
+                                                            className="flex-1 min-w-0"
+                                                        />
+                                                        {data.answers.length > 2 && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => removeAnswer(index)}
+                                                                className="shrink-0"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -318,14 +322,15 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
                                 <InputError message={errors.explanation} />
                             </div>
 
-                            <div className="flex gap-2">
-                                <Button type="submit" disabled={processing}>
+                            <div className="flex flex-col-reverse sm:flex-row flex-wrap gap-2">
+                                <Button type="submit" disabled={processing} className="w-full sm:w-auto">
                                     {processing ? 'Updating...' : 'Update Question'}
                                 </Button>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     asChild
+                                    className="w-full sm:w-auto"
                                 >
                                     <a href={admin.exams.show(exam.id).url}>Cancel</a>
                                 </Button>

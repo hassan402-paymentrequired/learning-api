@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import InputError from '@/components/input-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
@@ -50,7 +51,7 @@ export default function EditExam({ exam, subjects, current_subject_id }: Props) 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Edit Exam" />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 overflow-x-hidden">
                 <div>
                     <h1 className="text-2xl font-bold">Edit Exam</h1>
                     <p className="text-muted-foreground">Update exam information</p>
@@ -97,7 +98,7 @@ export default function EditExam({ exam, subjects, current_subject_id }: Props) 
                                 <InputError message={errors.description} />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="exam_type">Exam Type *</Label>
                                     <Select
@@ -160,14 +161,15 @@ export default function EditExam({ exam, subjects, current_subject_id }: Props) 
                                 </Label>
                             </div>
 
-                            <div className="flex gap-2">
-                                <Button type="submit" disabled={processing}>
+                            <div className="flex flex-col-reverse sm:flex-row flex-wrap gap-2">
+                                <Button type="submit" disabled={processing} className="w-full sm:w-auto">
                                     {processing ? 'Updating...' : 'Update Exam'}
                                 </Button>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     asChild
+                                    className="w-full sm:w-auto"
                                 >
                                     <a href={admin.exams.show(exam.id).url}>Cancel</a>
                                 </Button>

@@ -5,11 +5,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
-import { BookOpen, Plus, Search, Power, PowerOff, Trash2, Edit } from 'lucide-react';
+import { BookOpen, Plus, Search, Power, PowerOff, Trash2, Edit, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 import { Link, router } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
 interface Exam {
@@ -134,13 +135,13 @@ export default function ExamsIndex({ exams, filters }: Props) {
     return (
         <AppLayout>
             <Head title="Exams" />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 overflow-x-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold">Exams</h1>
                         <p className="text-muted-foreground">Manage practice exams and past questions</p>
                     </div>
-                    <Button asChild>
+                    <Button asChild className="w-full sm:w-auto">
                         <Link href={admin.exams.create().url}>
                             <Plus className="mr-2 h-4 w-4" />
                             Create Exam
@@ -152,11 +153,11 @@ export default function ExamsIndex({ exams, filters }: Props) {
                 {selectedExams.length > 0 && (
                     <Card className="border-primary">
                         <CardContent className="pt-6">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <p className="text-sm font-medium">
                                     {selectedExams.length} exam(s) selected
                                 </p>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -225,28 +226,29 @@ export default function ExamsIndex({ exams, filters }: Props) {
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {exams.data.map((exam) => (
-                        <Card key={exam.id} className="hover:shadow-lg transition-shadow">
+                        <Card key={exam.id} className="hover:shadow-lg transition-shadow min-w-0">
                             <CardHeader>
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-2 flex-1">
+                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                    <div className="flex items-start gap-2 flex-1 min-w-0">
                                         <Checkbox
                                             checked={selectedExams.includes(exam.id)}
                                             onCheckedChange={() => handleSelectExam(exam.id)}
+                                            className="shrink-0 mt-0.5"
                                         />
-                                        <div className="flex-1">
-                                            <CardTitle className="text-lg">{exam.title}</CardTitle>
-                                            <CardDescription className="mt-1">
+                                        <div className="flex-1 min-w-0">
+                                            <CardTitle className="text-base sm:text-lg break-words">{exam.title}</CardTitle>
+                                            <CardDescription className="mt-1 text-xs sm:text-sm">
                                                 {exam.exam_type} • Past Question
                                                 {exam.year && ` • ${exam.year}`}
                                             </CardDescription>
                                         </div>
                                     </div>
                                     {exam.is_active ? (
-                                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded">
+                                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded shrink-0 w-fit">
                                             Active
                                         </span>
                                     ) : (
-                                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 rounded">
+                                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 rounded shrink-0 w-fit">
                                             Inactive
                                         </span>
                                     )}
@@ -263,53 +265,51 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                             Subject: {exam.subject}
                                         </div>
                                     )}
-                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                                    <div className="flex items-center gap-2 pt-2 flex-wrap sm:flex-nowrap">
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             asChild
-                                            className="flex-1"
+                                            className="flex-1 min-w-0 sm:min-w-[80px]"
                                         >
                                             <Link href={admin.exams.show(exam.id).url}>View</Link>
                                         </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                            className="flex-1"
-                                        >
-                                            <Link href={admin.exams.edit(exam.id).url}>
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Edit
-                                            </Link>
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleToggleActive(exam.id)}
-                                            className="flex-1"
-                                        >
-                                            {exam.is_active ? (
-                                                <>
-                                                    <PowerOff className="mr-2 h-4 w-4" />
-                                                    Deactivate
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Power className="mr-2 h-4 w-4" />
-                                                    Activate
-                                                </>
-                                            )}
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleDelete(exam.id)}
-                                            className="flex-1"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete
-                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="outline" size="sm" className="px-2">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={admin.exams.edit(exam.id).url}>
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        Edit
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleToggleActive(exam.id)}>
+                                                    {exam.is_active ? (
+                                                        <>
+                                                            <PowerOff className="mr-2 h-4 w-4" />
+                                                            Deactivate
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Power className="mr-2 h-4 w-4" />
+                                                            Activate
+                                                        </>
+                                                    )}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    onClick={() => handleDelete(exam.id)}
+                                                    variant="destructive"
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 </div>
                             </CardContent>
@@ -326,19 +326,21 @@ export default function ExamsIndex({ exams, filters }: Props) {
                 )}
 
                 {exams.last_page > 1 && (
-                    <div className="flex justify-center gap-2">
+                    <div className="flex flex-wrap justify-center items-center gap-2">
                         <Button
                             variant="outline"
+                            size="sm"
                             disabled={exams.current_page === 1}
                             onClick={() => router.get(admin.exams.index().url, { page: exams.current_page - 1, ...filters })}
                         >
                             Previous
                         </Button>
-                        <span className="flex items-center px-4 text-sm text-muted-foreground">
+                        <span className="px-2 sm:px-4 py-1.5 text-sm text-muted-foreground">
                             Page {exams.current_page} of {exams.last_page}
                         </span>
                         <Button
                             variant="outline"
+                            size="sm"
                             disabled={exams.current_page === exams.last_page}
                             onClick={() => router.get(admin.exams.index().url, { page: exams.current_page + 1, ...filters })}
                         >
@@ -361,7 +363,7 @@ export default function ExamsIndex({ exams, filters }: Props) {
                                 Cancel
                             </Button>
                             <Button variant="destructive" onClick={confirmDelete}>
-                                Delete
+                                Deletez
                             </Button>
                         </DialogFooter>
                     </DialogContent>

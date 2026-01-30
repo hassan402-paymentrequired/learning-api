@@ -477,6 +477,17 @@ class ExamAttemptController extends Controller
                     ];
                 }
 
+                // Include all answer options for multiple_choice and true_false (for corrections view)
+                $questionAnswers = null;
+                if (in_array($question->question_type, ['multiple_choice', 'true_false']) && $question->relationLoaded('answers')) {
+                    $questionAnswers = $question->answers->map(fn ($a) => [
+                        'id' => $a->id,
+                        'answer_text' => $a->answer_text,
+                        'order' => $a->order,
+                        'is_correct' => $a->is_correct,
+                    ])->values()->all();
+                }
+
                 return [
                     'question' => [
                         'id' => $question->id,
@@ -484,6 +495,7 @@ class ExamAttemptController extends Controller
                         'question_type' => $question->question_type,
                         'explanation' => $question->explanation,
                         'expected_answer' => $question->expected_answer,
+                        'answers' => $questionAnswers,
                     ],
                     'user_answer' => $userAnswerData,
                     'correct_answer' => $correctAnswerData,
