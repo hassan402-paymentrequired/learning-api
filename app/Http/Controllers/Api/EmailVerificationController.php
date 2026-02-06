@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Otp;
 use App\Models\User;
 use App\Notifications\EmailVerificationNotification;
+use App\Notifications\WelcomeNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -114,6 +115,16 @@ class EmailVerificationController extends Controller
 
         // Verify user's email
         $user->update(['email_verified_at' => now()]);
+
+        // Send welcome email after verification
+        try {
+            $user->notify(new WelcomeNotification());
+        } catch (\Exception $e) {
+            Log::warning('Failed to send welcome email', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
