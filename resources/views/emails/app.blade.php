@@ -49,18 +49,11 @@
         style="display: flex; align-items: center; justify-content: center; flex-direction: column; margin-top: 1.25rem; font-family: Nunito, sans-serif">
         <section style="max-width: 42rem; background-color: #fff;">
             <header>
-                <a href="#">
+                <a href="{{ config('app.url') }}">
                     <img src="{{ asset('logo/favicon-32x32.png') }}"
-                        alt="Stepra logo" />
+                        alt="{{ config('app.name') }} logo" />
                 </a>
             </header>
-
-            @hasSection('header')
-                <div
-                    style="height: 200px; background-color: #365cce; width: 100%; color: #fff; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 1.25rem;">
-                    @yield('header')
-                </div>
-            @endif
 
             <main style="margin-top: 2rem; padding-left: 1.25rem; padding-right: 1.25rem;">
                 @yield('content')

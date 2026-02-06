@@ -100,7 +100,8 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        patch(admin.exams.questions.update(exam.id, question.id).url, {
+        const updateUrl = `/admin/exams/${exam.id}/questions/${question.id}`;
+        patch(updateUrl, {
             forceFormData: !!data.image,
             transform: (formData) => {
                 if (formData.question_type !== 'multiple_choice') {

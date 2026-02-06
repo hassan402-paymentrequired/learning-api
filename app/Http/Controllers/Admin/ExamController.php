@@ -98,8 +98,16 @@ class ExamController extends Controller
     {
         $exam->load(['questions.answers']);
 
+        // Other exams of same subject (different years) for question duplicating
+        $targetExams = Exam::where('exam_type', $exam->exam_type)
+            ->where('id', '!=', $exam->id)
+            ->when($exam->subject, fn ($q) => $q->where('subject', $exam->subject))
+            ->orderBy('year', 'desc')
+            ->get(['id', 'title', 'subject', 'year']);
+
         return Inertia::render('admin/exams/show', [
             'exam' => $exam,
+            'targetExams' => $targetExams,
             'import_errors' => session('import_errors', []),
         ]);
     }

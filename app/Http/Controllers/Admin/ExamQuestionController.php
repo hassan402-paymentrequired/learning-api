@@ -56,7 +56,7 @@ class ExamQuestionController extends Controller
             $rules['answers.*.order'] = 'required|string|in:A,B,C,D,E';
         } else {
             $rules['expected_answer'] = 'required|string';
-            $rules['answers'] = 'prohibited';
+            // answers may be sent by frontend for other types; we ignore it
         }
 
         $validated = $request->validate($rules);
@@ -167,7 +167,7 @@ class ExamQuestionController extends Controller
             $rules['answers.*.order'] = 'required|string|in:A,B,C,D,E';
         } else {
             $rules['expected_answer'] = 'required|string';
-            $rules['answers'] = 'prohibited';
+            // answers may be sent by frontend for other types; we ignore it
         }
 
         $validated = $request->validate($rules);
@@ -266,6 +266,55 @@ class ExamQuestionController extends Controller
 
         return redirect()->route('admin.exams.show', $exam)
             ->with('success', 'Question deleted successfully.');
+    }
+
+    /**
+     * Duplicate a question to another exam (e.g. same subject, different year).
+     */
+    public function duplicate(Request $request, Exam $exam, Question $question)
+    {
+        $request->validate([
+            'target_exam_id' => 'required|exists:exams,id',
+        ]);
+
+        $targetExam = Exam::findOrFail($request->target_exam_id);
+
+        if ($targetExam->id === $exam->id) {
+            return back()->withErrors(['target_exam_id' => 'Cannot duplicate to the same exam.']);
+        }
+
+        // Ensure question belongs to source exam
+        if ($question->exam_id !== $exam->id) {
+            abort(404);
+        }
+
+        // Optional: ensure same subject for past questions (e.g. English 2024 -> English 2023)
+        if ($exam->subject && $targetExam->subject && $exam->subject !== $targetExam->subject) {
+            return back()->withErrors(['target_exam_id' => 'Target exam must be the same subject (' . $exam->subject . ').']);
+        }
+
+        $question->load('answers');
+
+        $newQuestion = $question->replicate();
+        $newQuestion->exam_id = $targetExam->id;
+        $newQuestion->subject_id = $targetExam->subject
+            ? Subject::where('name', $targetExam->subject)->first()?->id
+            : $question->subject_id;
+        $newQuestion->exam_types = [$targetExam->exam_type];
+        $newQuestion->save();
+
+        foreach ($question->answers as $answer) {
+            $newAnswer = $answer->replicate();
+            $newAnswer->question_id = $newQuestion->id;
+            $newAnswer->save();
+        }
+
+        $targetExam->update([
+            'total_questions' => $targetExam->questions()->count(),
+        ]);
+
+        return redirect()->route('admin.exams.show', $targetExam)
+            ->with('success', 'Question duplicated successfully to ' . $targetExam->title . '.');
     }
 
     /**

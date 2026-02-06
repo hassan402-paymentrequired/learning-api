@@ -11,6 +11,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -62,8 +70,16 @@ interface Exam {
     questions: Question[];
 }
 
+interface TargetExam {
+    id: number;
+    title: string;
+    subject: string | null;
+    year: number | null;
+}
+
 interface Props {
     exam: Exam;
+    targetExams?: TargetExam[];
     import_errors?: string[];
 }
 
@@ -72,8 +88,12 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Exam Details', href: '#' },
 ];
 
-export default function ShowExam({ exam, import_errors = [] }: Props) {
+export default function ShowExam({ exam, targetExams = [], import_errors = [] }: Props) {
     const [uploadErrors, setUploadErrors] = useState<string[]>(import_errors);
+    const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+    const [questionToDuplicate, setQuestionToDuplicate] = useState<Question | null>(null);
+    const [duplicateTargetExamId, setDuplicateTargetExamId] = useState<string>('');
+    const [duplicateSubmitting, setDuplicateSubmitting] = useState(false);
     const [questionType, setQuestionType] = useState<
         'multiple_choice' | 'text_input'
     >('multiple_choice');
@@ -91,9 +111,34 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
     const handleDelete = (questionId: number) => {
         if (confirm('Are you sure you want to delete this question?')) {
             router.delete(
-                admin.exams.questions.destroy(exam?.id, questionId).url,
+                admin.exams.questions.destroy({ exam: exam.id, question: questionId }).url,
             );
         }
+    };
+
+    const openDuplicateModal = (question: Question) => {
+        setQuestionToDuplicate(question);
+        setDuplicateTargetExamId('');
+        setDuplicateModalOpen(true);
+    };
+
+    const closeDuplicateModal = () => {
+        setDuplicateModalOpen(false);
+        setQuestionToDuplicate(null);
+        setDuplicateTargetExamId('');
+    };
+
+    const confirmDuplicate = () => {
+        if (!questionToDuplicate || !duplicateTargetExamId) return;
+        setDuplicateSubmitting(true);
+        router.post(
+            `/admin/exams/${exam.id}/questions/${questionToDuplicate.id}/duplicate`,
+            { target_exam_id: parseInt(duplicateTargetExamId, 10) },
+            {
+                onFinish: () => setDuplicateSubmitting(false),
+                onSuccess: () => closeDuplicateModal(),
+            },
+        );
     };
 
     const handleBulkUpload = (e: React.FormEvent) => {
@@ -497,15 +542,23 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                                                         <Link
                                                             href={
                                                                 admin.exams.questions.edit(
-                                                                    [
-                                                                        exam.id,
-                                                                        question.id,
-                                                                    ],
+                                                                    { exam: exam.id, question: question.id },
                                                                 ).url
                                                             }
                                                         >
                                                             <Edit className="h-4 w-4" />
                                                         </Link>
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            openDuplicateModal(question)
+                                                        }
+                                                        className="shrink-0"
+                                                        title="Duplicate to another year"
+                                                    >
+                                                        <Copy className="h-4 w-4" />
                                                     </Button>
                                                     <Button
                                                         variant="outline"
@@ -579,6 +632,67 @@ export default function ShowExam({ exam, import_errors = [] }: Props) {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Duplicate Question Modal */}
+            <Dialog open={duplicateModalOpen} onOpenChange={(open) => !open && closeDuplicateModal()}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Duplicate Question</DialogTitle>
+                        <DialogDescription>
+                            {questionToDuplicate ? (
+                                <>
+                                    Copy this question to another exam (e.g. same subject, different
+                                    year). Select the target exam below.
+                                </>
+                            ) : null}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {targetExams.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            No other exams of this subject found. Create an exam for another year
+                            first.
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            <Label htmlFor="target-exam">Target exam (year)</Label>
+                            <Select
+                                value={duplicateTargetExamId}
+                                onValueChange={setDuplicateTargetExamId}
+                            >
+                                <SelectTrigger id="target-exam">
+                                    <SelectValue placeholder="Select exam to copy to..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {targetExams.map((target) => (
+                                        <SelectItem
+                                            key={target.id}
+                                            value={target.id.toString()}
+                                        >
+                                            {target.title}
+                                            {target.year ? ` (${target.year})` : ''}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeDuplicateModal}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={confirmDuplicate}
+                            disabled={
+                                !duplicateTargetExamId ||
+                                duplicateSubmitting ||
+                                targetExams.length === 0
+                            }
+                        >
+                            {duplicateSubmitting ? 'Duplicating...' : 'Duplicate'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
