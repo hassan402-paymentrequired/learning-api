@@ -283,23 +283,19 @@ class SubscriptionController extends Controller
                     'subscription_expires_at' => $expiresAt,
                 ]);
 
-                // Process referral rewards
-                if ($subscription->discount_amount > 0 && $user->referred_by) {
-                    $referral = \App\Models\Referral::where('referred_id', $user->id)
-                        ->where('status', 'pending')
-                        ->first();
+                // Process referral rewards: referrer gets 500 credit when referred user subscribes
+                $referral = \App\Models\Referral::where('referred_id', $user->id)
+                    ->where('status', 'pending')
+                    ->first();
 
-                    if ($referral) {
-                        // Calculate 10% reward for referrer
-                        $referrerReward = $subscription->amount_paid * 0.10; // 10% of amount paid
-
-                        $referral->update([
-                            'subscription_id' => $subscription->id,
-                            'referrer_reward_amount' => $referrerReward,
-                            'status' => 'rewarded',
-                            'rewarded_at' => now(),
-                        ]);
-                    }
+                if ($referral) {
+                    $referral->update([
+                        'subscription_id' => $subscription->id,
+                        'referrer_reward_amount' => 500,
+                        'status' => 'rewarded',
+                        'rewarded_at' => now(),
+                    ]);
+                    Log::info('Referral rewarded: referrer_id=' . $referral->referrer_id . ', referred_id=' . $user->id . ', subscription_id=' . $subscription->id);
                 }
 
                 // Generate referral code for user if they don't have one
@@ -382,25 +378,19 @@ class SubscriptionController extends Controller
                 'subscription_expires_at' => $expiresAt,
             ]);
 
-            // Process referral rewards
-            if ($subscription->discount_amount > 0 && $user->referred_by) {
-                $referral = \App\Models\Referral::where('referred_id', $user->id)
-                    ->where('status', 'pending')
-                    ->first();
+            // Process referral rewards: referrer gets 500 credit when referred user subscribes
+            $referral = \App\Models\Referral::where('referred_id', $user->id)
+                ->where('status', 'pending')
+                ->first();
 
-                if ($referral) {
-                    // Calculate 10% reward for referrer
-                    $referrerReward = $subscription->amount_paid * 0.10; // 10% of amount paid
-
-                    $referral->update([
-                        'subscription_id' => $subscription->id,
-                        'referrer_reward_amount' => $referrerReward,
-                        'status' => 'rewarded',
-                        'rewarded_at' => now(),
-                    ]);
-
-                    // TODO: Add reward to referrer's account/wallet or send notification
-                }
+            if ($referral) {
+                $referral->update([
+                    'subscription_id' => $subscription->id,
+                    'referrer_reward_amount' => 500,
+                    'status' => 'rewarded',
+                    'rewarded_at' => now(),
+                ]);
+                Log::info('Referral rewarded (verifyPayment): referrer_id=' . $referral->referrer_id . ', referred_id=' . $user->id . ', subscription_id=' . $subscription->id);
             }
 
             // Generate referral code for user if they don't have one
