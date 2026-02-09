@@ -79,7 +79,7 @@ class SubscriptionController extends Controller
                 // Check if user hasn't been referred before
                 if (!$user->referred_by) {
                     $discountAmount = $originalAmount * 0.05; // 5% discount
-                    $finalAmount = $originalAmount - $discountAmount;
+                    $finalAmount = $originalAmount;
                     // Store referral relationship (will be finalized after payment)
                     $user->referred_by = $referrer->id;
                     $user->save();
