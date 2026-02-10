@@ -197,9 +197,10 @@ class ExamController extends Controller
     public function getPracticeQuestions(Request $request)
     {
         $user = auth()->user();
-        $hasActiveSubscription = $user->hasActiveSubscription();
-        
-        // Determine max count based on subscription status
+        $clientIp = $request->ip() ?? '';
+        $hasActiveSubscription = $user->hasActiveSubscriptionForDevice($clientIp);
+
+        // Determine max count based on subscription status (valid for this device)
         $maxCount = $hasActiveSubscription ? 100 : 5;
         
         $request->validate([

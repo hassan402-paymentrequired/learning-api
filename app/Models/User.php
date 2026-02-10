@@ -28,6 +28,7 @@ class User extends Authenticatable implements JWTSubject
         'referred_by',
         'paystack_customer_code',
         'subscription_expires_at',
+        'subscription_device_id',
         'is_admin',
     ];
 
@@ -130,13 +131,29 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Check if user has active subscription.
+     * Check if user has active subscription (ignores device binding).
      */
     public function hasActiveSubscription(): bool
     {
         return $this->subscription_status === 'active'
             && $this->subscription_expires_at
             && $this->subscription_expires_at->isFuture();
+    }
+
+    /**
+     * Check if user has active subscription valid for this client (by IP).
+     * Subscription is only valid from the IP/device that was used when subscribing.
+     * subscription_device_id stores the client IP. If not set, returns true for backward compatibility.
+     */
+    public function hasActiveSubscriptionForDevice(?string $clientIp): bool
+    {
+        if (!$this->hasActiveSubscription()) {
+            return false;
+        }
+        if (empty($this->subscription_device_id)) {
+            return true;
+        }
+        return $clientIp !== null && $clientIp !== '' && $this->subscription_device_id === $clientIp;
     }
 
     /**

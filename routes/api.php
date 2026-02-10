@@ -88,6 +88,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     Route::get('/subscriptions/status', [SubscriptionController::class, 'status']);
     Route::post('/subscriptions/initialize-payment', [SubscriptionController::class, 'initializePayment']);
     Route::post('/subscriptions/verify-payment', [SubscriptionController::class, 'verifyPayment']);
+    Route::post('/subscriptions/register-device', [SubscriptionController::class, 'registerDevice']);
 
     // Referral routes
     Route::get('/referrals', [ReferralController::class, 'index']);

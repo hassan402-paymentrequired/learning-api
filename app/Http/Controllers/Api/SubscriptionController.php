@@ -417,21 +417,58 @@ class SubscriptionController extends Controller
     }
 
     /**
+     * Bind the current request IP to the user's subscription.
+     * Call this after successful payment so subscription is only valid from this IP/device.
+     */
+    public function registerDevice(Request $request)
+    {
+        $user = auth()->user();
+        $clientIp = $request->ip() ?? '';
+
+        if (!$user->hasActiveSubscription()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have an active subscription to bind to this device.',
+            ], 400);
+        }
+
+        // Already bound to a different IP
+        if ($user->subscription_device_id !== null && $user->subscription_device_id !== $clientIp) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your subscription is tied to another device. You can only use your subscription on the device you used when subscribing.',
+                'code' => 'SUBSCRIPTION_DEVICE_MISMATCH',
+            ], 403);
+        }
+
+        $user->update(['subscription_device_id' => $clientIp]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'This device is now linked to your subscription.',
+        ]);
+    }
+
+    /**
      * Get current user's subscription status.
+     * Subscription is valid only on the device that was used when subscribing (if device binding is set).
      */
     public function status(Request $request)
     {
         $user = auth()->user();
+        $clientIp = $request->ip() ?? '';
 
         $activeSubscription = $user->activeSubscription;
+        $hasActiveForDevice = $user->hasActiveSubscriptionForDevice($clientIp);
 
         return response()->json([
             'success' => true,
             'data' => [
-                'has_active_subscription' => $user->hasActiveSubscription(),
+                'has_active_subscription' => $hasActiveForDevice,
                 'subscription_status' => $user->subscription_status,
                 'subscription_expires_at' => $user->subscription_expires_at,
-                'subscription' => $activeSubscription ? [
+                'subscription_device_bound' => !empty($user->subscription_device_id),
+                'subscription' => $activeSubscription && $hasActiveForDevice ? [
                     'id' => $activeSubscription->id,
                     'plan' => [
                         'name' => $activeSubscription->plan->name,
