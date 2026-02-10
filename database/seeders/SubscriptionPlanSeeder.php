@@ -12,15 +12,15 @@ class SubscriptionPlanSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create single yearly subscription plan
-        SubscriptionPlan::firstOrCreate(
+        // Create or update yearly subscription plan (₦2,000)
+        SubscriptionPlan::updateOrCreate(
             [
                 'slug' => 'yearly-plan',
             ],
             [
                 'name' => 'Yearly Plan',
                 'description' => 'Full access to all exam questions, practice tests, and past questions for 1 year.',
-                'price' => 2000.00, // 2000 Naira
+                'price' => 2000.00,
                 'interval' => 'year',
                 'interval_count' => 1,
                 'currency' => 'NGN',
