@@ -1,58 +1,45 @@
-@extends('emails.app')
-
-@section('title', 'Password Reset')
-
-@section('header')
-  <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <div style="width: 2.5rem; height: 1px; background-color: #fff;"></div>
-    <svg
-      stroke="currentColor"
-      fill="currentColor"
-      stroke-width="0"
-      viewBox="0 0 24 24"
-      height="20"
-      width="20"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path fill="none" d="M0 0h24v24H0V0z"></path>
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path>
-    </svg>
-    <div style="width: 2.5rem; height: 1px; background-color: #fff;"></div>
-  </div>
-  <div style="display: flex; flex-direction: column; gap: 1.25rem;">
-    <div style="text-align: center; font-size: 14px; font-weight: normal;">
-      PASSWORD RESET REQUEST
-    </div>
-    <div
-      class=""
-      style="font-size: 24px; font-weight: bold; text-transform: capitalize; text-align: center"
-    >
-      Reset Your Password
-    </div>
-  </div>
-@endsection
+@extends('emails.layouts.base')
 
 @section('content')
-  <h4 style="color: #374151;">Hello {{ $user->name }},</h4>
-  <p style="line-height: 1.5; color: #4b5563;">
-    You requested to reset your password. Please use the following One Time Password(OTP):
-  </p>
-  <div style="display: flex; align-items: center; margin-top: 1rem; gap: 20px;">
-    @php
-      $otpDigits = str_split((string)$otp);
-    @endphp
-    @foreach($otpDigits as $digit)
-      <p class="border otpbox" style="">
-        {{ $digit }}
-      </p>
-    @endforeach
-  </div>
-  <p style="margin-top: 1rem; line-height: 1.75; color: #4b5563;">
-    This passcode will only be valid for the next
-    <span style="font-weight: bold;">{{ config('auth.password_reset_expires_in', 15) }} minutes</span>. If you did not request a password reset, please ignore this email.
-  </p>
-  <p style="margin-top: 2rem; color: #4b5563;">
-    Thank you, <br />
-    {{ config('app.name') }}
-  </p>
+<!--[if mso]><table role="presentation" width="100%"><tr><td><![endif]-->
+<h1 style="margin: 0px; line-height: 140%; text-align: center; word-wrap: break-word; font-family: 'Montserrat',sans-serif; font-size: 22px; font-weight: 700;"><span>Reset Your Password</span></h1>
+<!--[if mso]></td></tr></table><![endif]-->
+
+<table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
+  <tbody>
+    <tr>
+      <td style="overflow-wrap:break-word;word-break:break-word;padding:20px 10px;font-family:arial,helvetica,sans-serif;" align="left">
+        <div style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
+          <p style="line-height: 140%; margin: 0px;">Hi {{ $user->name ?? 'there' }},</p>
+          <p style="line-height: 140%; margin: 10px 0 0 0;">You requested to reset your password. Please use the following One Time Password (OTP):</p>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table id="u_content_button_1" style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
+  <tbody>
+    <tr>
+      <td style="overflow-wrap:break-word;word-break:break-word;padding:10px 10px 30px;font-family:arial,helvetica,sans-serif;" align="left">
+        <div align="center">
+          <div class="v-button v-size-width" style="box-sizing: border-box; display: inline-block; text-decoration: none; text-size-adjust: none; text-align: center; color: rgb(255, 255, 255); background: rgb(0, 0, 0); border-radius: 0px; width: 48%; max-width: 100%; word-break: break-word; overflow-wrap: break-word; border-color: rgb(0, 0, 0); border-style: solid; border-width: 2px; font-size: 18px; line-height: inherit;"><span style="display:block;padding:10px 20px 8px;line-height:120%;">{{ $otp }}</span></div>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
+  <tbody>
+    <tr>
+      <td style="overflow-wrap:break-word;word-break:break-word;padding:30px 10px 10px;font-family:arial,helvetica,sans-serif;" align="left">
+        <div style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
+          <p style="line-height: 140%; margin: 0px;">This passcode will only be valid for the next <span style="font-weight: bold;">{{ config('auth.password_reset_expires_in', 15) }} minutes</span>.</p>
+          <p style="line-height: 140%; margin: 10px 0 0 0;">If you did not request a password reset, please ignore this email.</p>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
 @endsection
