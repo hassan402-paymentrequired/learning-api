@@ -48,7 +48,7 @@
                           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                             <tr>
                               <td style="padding-right: 0px;padding-left: 0px;" align="center">
-                                <img align="center" border="0" src="{{ $logoUrl ?? asset('images/image-1.png') }}" alt="{{ config('app.name') }}" title="{{ config('app.name') }}" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: inline-block !important;border: none;height: auto;float: none;width: 100%;max-width: 190px;" width="190"/>
+                                <img align="center" border="0" src="{{ asset('images/image-1.png') }}" alt="{{ config('app.name') }}" title="{{ config('app.name') }}" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: inline-block !important;border: none;height: auto;float: none;width: 100%;max-width: 190px;" width="190"/>
                               </td>
                             </tr>
                           </table>
