@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Answer;
 use App\Models\Department;
 use App\Models\Exam;
 use App\Models\Question;
@@ -76,7 +77,86 @@ class ExamController extends Controller
             ], 404);
         }
 
-        $questions = $exam->questions()
+        // OPTIMIZATION: Use database-level filtering and bulk operations
+        // Step 1: Get question IDs first (lightweight query)
+        $questionIds = $exam->questions()
+            ->orderBy('id')
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($questionIds)) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'exam' => [
+                        'id' => $exam->id,
+                        'title' => $exam->title,
+                        'total_questions' => $exam->questions_count,
+                    ],
+                    'questions' => [],
+                ],
+            ]);
+        }
+
+        // Step 2: Identify true/false questions that need answers using database-level filtering
+        // Use a subquery to find questions without both True and False answers (avoids N+1 queries)
+        $questionsNeedingAnswers = Question::whereIn('id', $questionIds)
+            ->where('question_type', 'true_false')
+            ->whereRaw('(SELECT COUNT(*) FROM answers WHERE answers.question_id = questions.id AND answers.answer_text IN ("True", "False")) < 2')
+            ->get(['id', 'expected_answer']);
+
+        // Step 3: Bulk create missing answers if needed (chunked bulk insert)
+        if ($questionsNeedingAnswers->isNotEmpty()) {
+            $answersToInsert = [];
+            $questionIdsToCheck = $questionsNeedingAnswers->pluck('id')->toArray();
+            
+            // Get existing answers in one query to avoid duplicates
+            $existingAnswers = Answer::whereIn('question_id', $questionIdsToCheck)
+                ->whereIn('answer_text', ['True', 'False'])
+                ->get()
+                ->groupBy('question_id')
+                ->map(function ($answers) {
+                    return $answers->pluck('answer_text')->toArray();
+                });
+            
+            foreach ($questionsNeedingAnswers as $question) {
+                $expectedAnswerLower = strtolower(trim($question->expected_answer ?? ''));
+                $existing = $existingAnswers->get($question->id, []);
+                
+                // Only insert answers that don't exist
+                if (!in_array('True', $existing)) {
+                    $answersToInsert[] = [
+                        'question_id' => $question->id,
+                        'answer_text' => 'True',
+                        'order' => 'A',
+                        'is_correct' => $expectedAnswerLower === 'true',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                
+                if (!in_array('False', $existing)) {
+                    $answersToInsert[] = [
+                        'question_id' => $question->id,
+                        'answer_text' => 'False',
+                        'order' => 'B',
+                        'is_correct' => $expectedAnswerLower === 'false',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+            }
+
+            // Bulk insert in chunks to avoid memory issues
+            if (!empty($answersToInsert)) {
+                collect($answersToInsert)->chunk(500)->each(function ($chunk) {
+                    Answer::insert($chunk->toArray());
+                });
+            }
+        }
+
+        // Step 4: Fetch questions with answers in one optimized query
+        $questions = Question::whereIn('id', $questionIds)
             ->with(['answers' => function ($query) {
                 $query->select('id', 'question_id', 'answer_text', 'order')
                     ->orderBy('order');
@@ -84,42 +164,12 @@ class ExamController extends Controller
             ->orderBy('id')
             ->get()
             ->map(function ($question, $index) {
-                // For true/false questions, create answer records if they don't exist
-                if ($question->question_type === 'true_false' && $question->answers->isEmpty()) {
-                    // Create answer records for true/false questions
-                    $expectedAnswer = strtolower(trim($question->expected_answer ?? ''));
-                    $trueAnswer = $question->answers()->firstOrCreate(
-                        [
-                            'question_id' => $question->id,
-                            'answer_text' => 'True',
-                        ],
-                        [
-                            'order' => 'A',
-                            'is_correct' => $expectedAnswer === 'true',
-                        ]
-                    );
-                    
-                    $falseAnswer = $question->answers()->firstOrCreate(
-                        [
-                            'question_id' => $question->id,
-                            'answer_text' => 'False',
-                        ],
-                        [
-                            'order' => 'B',
-                            'is_correct' => $expectedAnswer === 'false',
-                        ]
-                    );
-                    
-                    // Reload answers
-                    $question->load('answers');
-                }
-                
                 return [
                     'id' => $question->id,
                     'question_text' => $question->question_text,
                     'question_type' => $question->question_type,
                     'image' => $question->image,
-                    'order' => $index + 1, // Use index-based ordering
+                    'order' => $index + 1,
                     'answers' => $question->answers->map(function ($answer) {
                         return [
                             'id' => $answer->id,
@@ -229,56 +279,100 @@ class ExamController extends Controller
             ], 404);
         }
 
-        // Get random questions that:
-        // 1. Belong to the requested subject (subject_id)
-        // 2. Have the requested exam_type in their exam_types array
-        // 3. Questions should be available for practice (can be standalone or linked to any exam)
-        $questions = Question::where('subject_id', $subjectModel->id)
+        // OPTIMIZATION: Use database-level filtering and bulk operations
+        // Step 1: Get question IDs first (lightweight query)
+        $questionIds = Question::where('subject_id', $subjectModel->id)
             ->whereJsonContains('exam_types', $examType)
             ->inRandomOrder()
             ->limit($count)
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($questionIds)) {
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'has_active_subscription' => $hasActiveSubscription,
+                'max_questions_allowed' => $maxCount,
+            ]);
+        }
+
+        // Step 2: Identify true/false questions that need answers using database-level filtering
+        // Use a subquery to find questions without both True and False answers (avoids loading into memory)
+        $questionsNeedingAnswers = Question::whereIn('id', $questionIds)
+            ->where('question_type', 'true_false')
+            ->whereRaw('(SELECT COUNT(*) FROM answers WHERE answers.question_id = questions.id AND answers.answer_text IN ("True", "False")) < 2')
+            ->get(['id', 'expected_answer']);
+
+        // Step 3: Bulk create missing answers if needed (chunked bulk insert)
+        if ($questionsNeedingAnswers->isNotEmpty()) {
+            $answersToInsert = [];
+            $questionIdsToCheck = $questionsNeedingAnswers->pluck('id')->toArray();
+            
+            // Get existing answers in one query to avoid duplicates
+            $existingAnswers = Answer::whereIn('question_id', $questionIdsToCheck)
+                ->whereIn('answer_text', ['True', 'False'])
+                ->get()
+                ->groupBy('question_id')
+                ->map(function ($answers) {
+                    return $answers->pluck('answer_text')->toArray();
+                });
+            
+            foreach ($questionsNeedingAnswers as $question) {
+                $expectedAnswerLower = strtolower(trim($question->expected_answer ?? ''));
+                $existing = $existingAnswers->get($question->id, []);
+                
+                // Only insert answers that don't exist
+                if (!in_array('True', $existing)) {
+                    $answersToInsert[] = [
+                        'question_id' => $question->id,
+                        'answer_text' => 'True',
+                        'order' => 'A',
+                        'is_correct' => $expectedAnswerLower === 'true',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                
+                if (!in_array('False', $existing)) {
+                    $answersToInsert[] = [
+                        'question_id' => $question->id,
+                        'answer_text' => 'False',
+                        'order' => 'B',
+                        'is_correct' => $expectedAnswerLower === 'false',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+            }
+
+            // Bulk insert in chunks to avoid memory issues with very large datasets
+            if (!empty($answersToInsert)) {
+                collect($answersToInsert)->chunk(500)->each(function ($chunk) {
+                    Answer::insert($chunk->toArray());
+                });
+            }
+        }
+
+        // Step 4: Fetch questions with answers in one optimized query
+        $questions = Question::whereIn('id', $questionIds)
             ->with(['answers' => function ($query) {
                 $query->select('id', 'question_id', 'answer_text', 'order')
                     ->orderBy('order');
             }])
             ->get()
+            ->sortBy(function ($question) use ($questionIds) {
+                // Maintain original random order
+                return array_search($question->id, $questionIds);
+            })
+            ->values()
             ->map(function ($question, $index) {
-                // For true/false questions, create answer records if they don't exist
-                if ($question->question_type === 'true_false' && $question->answers->isEmpty()) {
-                    // Create answer records for true/false questions
-                    $expectedAnswer = strtolower(trim($question->expected_answer ?? ''));
-                    $trueAnswer = $question->answers()->firstOrCreate(
-                        [
-                            'question_id' => $question->id,
-                            'answer_text' => 'True',
-                        ],
-                        [
-                            'order' => 'A',
-                            'is_correct' => $expectedAnswer === 'true',
-                        ]
-                    );
-                    
-                    $falseAnswer = $question->answers()->firstOrCreate(
-                        [
-                            'question_id' => $question->id,
-                            'answer_text' => 'False',
-                        ],
-                        [
-                            'order' => 'B',
-                            'is_correct' => $expectedAnswer === 'false',
-                        ]
-                    );
-                    
-                    // Reload answers
-                    $question->load('answers');
-                }
-                
                 return [
                     'id' => $question->id,
                     'question_text' => $question->question_text,
                     'question_type' => $question->question_type,
                     'image' => $question->image,
-                    'order' => $index + 1, // Use index-based ordering
+                    'order' => $index + 1,
                     'answers' => $question->answers->map(function ($answer) {
                         return [
                             'id' => $answer->id,

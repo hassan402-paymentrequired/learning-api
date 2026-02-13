@@ -495,6 +495,7 @@ class ExamAttemptController extends Controller
                         'question_type' => $question->question_type,
                         'explanation' => $question->explanation,
                         'expected_answer' => $question->expected_answer,
+                        'image' => $question->image,
                         'answers' => $questionAnswers,
                     ],
                     'user_answer' => $userAnswerData,
