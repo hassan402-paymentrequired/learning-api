@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -18,6 +19,7 @@ class Subject extends Model
         'exam_types',
         'is_active',
         'order',
+        'department_id',
     ];
 
     protected $casts = [
@@ -25,6 +27,14 @@ class Subject extends Model
         'order' => 'integer',
         'exam_types' => 'array',
     ];
+
+    /**
+     * Get the department that owns the subject.
+     */
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
 
     /**
      * Get the questions for the subject.

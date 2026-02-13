@@ -30,10 +30,17 @@ import { useEffect } from 'react';
 interface Subject {
     id: number;
     name: string;
+    department_id: number | null;
+}
+
+interface Department {
+    id: number;
+    name: string;
 }
 
 interface Props {
     subjects: Subject[];
+    departments: Department[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -41,8 +48,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Create Question', href: '#' },
 ];
 
-export default function CreateQuestion({ subjects }: Props) {
+export default function CreateQuestion({ subjects, departments }: Props) {
     const { data, setData, post, processing, errors } = useForm({
+        department_id: null as number | null,
         subject_id: '',
         question_text: '',
         image: null as File | null,
@@ -59,6 +67,11 @@ export default function CreateQuestion({ subjects }: Props) {
             { answer_text: '', is_correct: false, order: 'B' },
         ] as Array<{ answer_text: string; is_correct: boolean; order: string }>,
     });
+
+    // Filter subjects based on selected department when DLI/UNILAG is selected
+    const filteredSubjects = data.exam_types.some(type => type === 'DLI' || type === 'UNILAG') && data.department_id
+        ? subjects.filter(subject => subject.department_id === data.department_id)
+        : subjects;
 
     // Clear answers when question type changes to non-multiple_choice
     useEffect(() => {
@@ -120,11 +133,13 @@ export default function CreateQuestion({ subjects }: Props) {
             forceFormData: !!data.image,
             transform: (formData) => {
                 // Create a new object without answers for non-multiple_choice questions
-                if (formData.question_type !== 'multiple_choice') {
-                    const { answers, ...rest } = formData;
-                    return rest;
+                // Also remove department_id as it's not stored on questions (only on subjects)
+                const { department_id, ...rest } = formData;
+                if (rest.question_type !== 'multiple_choice') {
+                    const { answers, ...restWithoutAnswers } = rest;
+                    return restWithoutAnswers;
                 }
-                return formData;
+                return rest;
             },
             onError: (errors: any) => {
                 // Show toast notification for errors
@@ -192,6 +207,95 @@ export default function CreateQuestion({ subjects }: Props) {
                         )}
                         
                         <form onSubmit={submit} className="space-y-6">
+                            <div className="space-y-2">
+                                <Label>Available for Exam Types *</Label>
+                                <div className="flex gap-4">
+                                    {['JAMB', 'DLI', 'UNILAG', 'GENERAL'].map(
+                                        (type) => (
+                                            <div
+                                                key={type}
+                                                className="flex items-center space-x-2"
+                                            >
+                                                <Checkbox
+                                                    id={`exam_type_${type}`}
+                                                    checked={data.exam_types.includes(
+                                                        type,
+                                                    )}
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) => {
+                                                        const newExamTypes = checked
+                                                            ? [
+                                                                  ...data.exam_types,
+                                                                  type,
+                                                              ]
+                                                            : data.exam_types.filter(
+                                                                  (t) =>
+                                                                      t !==
+                                                                      type,
+                                                              );
+                                                        setData('exam_types', newExamTypes);
+                                                        
+                                                        // Clear department and subject if DLI/UNILAG is unchecked
+                                                        if (!checked && (type === 'DLI' || type === 'UNILAG')) {
+                                                            const hasDliOrUnilag = newExamTypes.some(t => t === 'DLI' || t === 'UNILAG');
+                                                            if (!hasDliOrUnilag) {
+                                                                setData('department_id', null);
+                                                                setData('subject_id', '');
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                                <Label
+                                                    htmlFor={`exam_type_${type}`}
+                                                    className="cursor-pointer font-normal"
+                                                >
+                                                    {type}
+                                                </Label>
+                                            </div>
+                                        ),
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Select which exam types this question should
+                                    be available for. You can select multiple.
+                                </p>
+                                <InputError message={errors.exam_types} />
+                            </div>
+
+                            {/* Department Selection for DLI/UNILAG */}
+                            {(data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="department_id">Department *</Label>
+                                    <Select
+                                        value={data.department_id?.toString() || ''}
+                                        onValueChange={(value) => {
+                                            setData('department_id', value ? parseInt(value) : null);
+                                            setData('subject_id', ''); // Clear subject when department changes
+                                        }}
+                                        required
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a department" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {departments.map((department) => (
+                                                <SelectItem
+                                                    key={department.id}
+                                                    value={department.id.toString()}
+                                                >
+                                                    {department.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Department is required for DLI/Unilag questions.
+                                    </p>
+                                    <InputError message={(errors as any).department_id} />
+                                </div>
+                            )}
+
                             <div className="grid gap-2">
                                 <Label htmlFor="subject_id">Subject *</Label>
                                 <Select
@@ -200,12 +304,19 @@ export default function CreateQuestion({ subjects }: Props) {
                                         setData('subject_id', value)
                                     }
                                     required
+                                    disabled={filteredSubjects.length === 0}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a subject" />
+                                        <SelectValue placeholder={
+                                            (data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && !data.department_id
+                                                ? "Select a department first"
+                                                : filteredSubjects.length === 0
+                                                ? "No subjects available"
+                                                : "Select a subject"
+                                        } />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {subjects.map((subject) => (
+                                        {filteredSubjects.map((subject) => (
                                             <SelectItem
                                                 key={subject.id}
                                                 value={subject.id.toString()}
@@ -215,6 +326,11 @@ export default function CreateQuestion({ subjects }: Props) {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {(data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && !data.department_id && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Please select a department first to see available subjects.
+                                    </p>
+                                )}
                                 <InputError message={errors.subject_id} />
                             </div>
 
@@ -441,54 +557,6 @@ export default function CreateQuestion({ subjects }: Props) {
                                 <InputError message={errors.explanation} />
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Available for Exam Types *</Label>
-                                <div className="flex gap-4">
-                                    {['JAMB', 'DLI', 'UNILAG', 'GENERAL'].map(
-                                        (type) => (
-                                            <div
-                                                key={type}
-                                                className="flex items-center space-x-2"
-                                            >
-                                                <Checkbox
-                                                    id={`exam_type_${type}`}
-                                                    checked={data.exam_types.includes(
-                                                        type,
-                                                    )}
-                                                    onCheckedChange={(
-                                                        checked,
-                                                    ) => {
-                                                        setData(
-                                                            'exam_types',
-                                                            checked
-                                                                ? [
-                                                                      ...data.exam_types,
-                                                                      type,
-                                                                  ]
-                                                                : data.exam_types.filter(
-                                                                      (t) =>
-                                                                          t !==
-                                                                          type,
-                                                                  ),
-                                                        );
-                                                    }}
-                                                />
-                                                <Label
-                                                    htmlFor={`exam_type_${type}`}
-                                                    className="cursor-pointer font-normal"
-                                                >
-                                                    {type}
-                                                </Label>
-                                            </div>
-                                        ),
-                                    )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Select which exam types this question should
-                                    be available for. You can select multiple.
-                                </p>
-                                <InputError message={errors.exam_types} />
-                            </div>
 
                             <div className="flex gap-2">
                                 <Button type="submit" disabled={processing}>

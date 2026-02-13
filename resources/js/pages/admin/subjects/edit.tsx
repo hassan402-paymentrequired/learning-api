@@ -4,10 +4,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { ArrowLeft, Save } from 'lucide-react';
 import admin from '@/routes/admin';
+
+interface Department {
+    id: number;
+    name: string;
+}
 
 interface Subject {
     id: number;
@@ -16,19 +22,22 @@ interface Subject {
     description: string | null;
     exam_types: string[] | null;
     is_active: boolean;
+    department_id: number | null;
 }
 
 interface Props {
     subject: Subject;
+    departments: Department[];
 }
 
-export default function EditSubject({ subject }: Props) {
+export default function EditSubject({ subject, departments }: Props) {
     const { data, setData, patch, processing, errors } = useForm({
         name: subject.name,
         description: subject.description || '',
         exam_types: (subject.exam_types && Array.isArray(subject.exam_types)) 
             ? subject.exam_types 
             : (subject.exam_types ? [subject.exam_types] : []),
+        department_id: subject.department_id,
         is_active: subject.is_active,
     });
 
@@ -104,6 +113,16 @@ export default function EditSubject({ subject }: Props) {
                                                         ? [...data.exam_types, type]
                                                         : data.exam_types.filter((t) => t !== type)
                                                     );
+                                                    // Clear department if DLI/UNILAG is unchecked
+                                                    if (!checked && (type === 'DLI' || type === 'UNILAG')) {
+                                                        const hasDliOrUnilag = (checked
+                                                            ? [...data.exam_types, type]
+                                                            : data.exam_types.filter((t) => t !== type)
+                                                        ).some(t => t === 'DLI' || t === 'UNILAG');
+                                                        if (!hasDliOrUnilag) {
+                                                            setData('department_id', null);
+                                                        }
+                                                    }
                                                 }}
                                             />
                                             <Label htmlFor={`exam_type_${type}`} className="font-normal cursor-pointer">
@@ -119,6 +138,33 @@ export default function EditSubject({ subject }: Props) {
                                     <p className="text-sm text-red-500">{errors.exam_types}</p>
                                 )}
                             </div>
+
+                            {(data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="department_id">Department *</Label>
+                                    <Select
+                                        value={data.department_id?.toString() || ''}
+                                        onValueChange={(value) => setData('department_id', value ? parseInt(value) : null)}
+                                    >
+                                        <SelectTrigger id="department_id">
+                                            <SelectValue placeholder="Select a department" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {departments.map((dept) => (
+                                                <SelectItem key={dept.id} value={dept.id.toString()}>
+                                                    {dept.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Department is required for DLI/Unilag subjects.
+                                    </p>
+                                    {errors.department_id && (
+                                        <p className="text-sm text-red-500">{errors.department_id}</p>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="flex items-center space-x-2">
                                 <Checkbox

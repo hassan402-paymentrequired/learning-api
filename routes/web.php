@@ -70,6 +70,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/bulk-upload', [App\Http\Controllers\Admin\QuestionController::class, 'bulkUpload'])->name('bulk-upload');
         });
 
+        // Departments routes
+        Route::prefix('departments')->name('departments.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\DepartmentController::class, 'index'])->name('index');
+            Route::get('/create', [App\Http\Controllers\Admin\DepartmentController::class, 'create'])->name('create');
+            Route::post('/', [App\Http\Controllers\Admin\DepartmentController::class, 'store'])->name('store');
+            Route::get('/{department}/edit', [App\Http\Controllers\Admin\DepartmentController::class, 'edit'])->name('edit');
+            Route::patch('/{department}', [App\Http\Controllers\Admin\DepartmentController::class, 'update'])->name('update');
+            Route::post('/{department}/toggle-active', [App\Http\Controllers\Admin\DepartmentController::class, 'toggleActive'])->name('toggle-active');
+            Route::delete('/{department}', [App\Http\Controllers\Admin\DepartmentController::class, 'destroy'])->name('destroy');
+        });
+
         // Subjects routes
         Route::prefix('subjects')->name('subjects.')->group(function () {
             Route::get('/', [App\Http\Controllers\Admin\SubjectController::class, 'index'])->name('index');

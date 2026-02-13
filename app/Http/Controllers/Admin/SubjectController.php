@@ -61,7 +61,13 @@ class SubjectController extends Controller
      */
     public function create()
     {
-        return Inertia::render('admin/subjects/create');
+        $departments = \App\Models\Department::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return Inertia::render('admin/subjects/create', [
+            'departments' => $departments,
+        ]);
     }
 
     /**
@@ -74,8 +80,18 @@ class SubjectController extends Controller
             'description' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'department_id' => 'nullable|exists:departments,id',
             'is_active' => 'boolean',
         ]);
+
+        // Require department_id if exam_types includes DLI or UNILAG
+        if (in_array('DLI', $validated['exam_types']) || in_array('UNILAG', $validated['exam_types'])) {
+            if (empty($validated['department_id'])) {
+                return redirect()->back()
+                    ->withErrors(['department_id' => 'Department is required for DLI/Unilag subjects.'])
+                    ->withInput();
+            }
+        }
 
         $subject = Subject::create($validated);
 
@@ -88,8 +104,13 @@ class SubjectController extends Controller
      */
     public function edit(Subject $subject)
     {
+        $departments = \App\Models\Department::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('admin/subjects/edit', [
             'subject' => $subject,
+            'departments' => $departments,
         ]);
     }
 
@@ -103,8 +124,18 @@ class SubjectController extends Controller
             'description' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'department_id' => 'nullable|exists:departments,id',
             'is_active' => 'boolean',
         ]);
+
+        // Require department_id if exam_types includes DLI or UNILAG
+        if (in_array('DLI', $validated['exam_types']) || in_array('UNILAG', $validated['exam_types'])) {
+            if (empty($validated['department_id'])) {
+                return redirect()->back()
+                    ->withErrors(['department_id' => 'Department is required for DLI/Unilag subjects.'])
+                    ->withInput();
+            }
+        }
 
         $subject->update($validated);
 

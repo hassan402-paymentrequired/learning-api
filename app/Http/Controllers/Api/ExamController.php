@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Department;
 use App\Models\Exam;
 use App\Models\Question;
 use App\Models\Subject;
@@ -353,6 +354,51 @@ class ExamController extends Controller
         return response()->json([
             'success' => true,
             'data' => $years,
+        ]);
+    }
+
+    /**
+     * Get list of active departments (for Unilag/DLI practice flow).
+     */
+    public function departments(Request $request)
+    {
+        $departments = Department::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'description']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $departments,
+        ]);
+    }
+
+    /**
+     * Get subjects for a specific department (filtered by exam_type).
+     */
+    public function departmentSubjects(Request $request, $departmentId)
+    {
+        $request->validate([
+            'exam_type' => 'required|in:DLI,UNILAG',
+        ]);
+
+        $department = Department::where('id', $departmentId)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $subjects = Subject::where('is_active', true)
+            ->where('department_id', $department->id)
+            ->where(function ($query) use ($request) {
+                $query->whereJsonContains('exam_types', $request->exam_type)
+                    ->orWhereHas('questions', function ($q) use ($request) {
+                        $q->whereJsonContains('exam_types', $request->exam_type);
+                    });
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $subjects,
         ]);
     }
 }

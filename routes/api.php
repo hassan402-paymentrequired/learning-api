@@ -61,6 +61,10 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     Route::get('/exams/{exam}', [ExamController::class, 'show']);
     Route::get('/exams/{exam}/questions', [ExamController::class, 'questions']);
     Route::get('/questions/practice', [ExamController::class, 'getPracticeQuestions']);
+    
+    // Department routes (for Unilag/DLI practice flow)
+    Route::get('/departments', [ExamController::class, 'departments']);
+    Route::get('/departments/{department}/subjects', [ExamController::class, 'departmentSubjects']);
 
     // Exam attempt routes
     Route::post('/exams/{exam}/start', [ExamAttemptController::class, 'start']);

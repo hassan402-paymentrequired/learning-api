@@ -61,10 +61,15 @@ class QuestionController extends Controller
      */
     public function create()
     {
-        $subjects = Subject::where('is_active', true)->orderBy('name')->get();
+        $subjects = Subject::where('is_active', true)
+            ->with('department:id,name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'department_id']);
+        $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('admin/questions/create', [
             'subjects' => $subjects,
+            'departments' => $departments,
         ]);
     }
 
@@ -213,8 +218,12 @@ class QuestionController extends Controller
      */
     public function edit(Question $question)
     {
-        $question->load('answers', 'subject');
-        $subjects = Subject::where('is_active', true)->orderBy('name')->get();
+        $question->load('answers', 'subject', 'subject.department');
+        $subjects = Subject::where('is_active', true)
+            ->with('department:id,name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'department_id']);
+        $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         // Ensure exam_types is an array
         if (!$question->exam_types || !is_array($question->exam_types)) {
@@ -224,6 +233,7 @@ class QuestionController extends Controller
         return Inertia::render('admin/questions/edit', [
             'question' => $question,
             'subjects' => $subjects,
+            'departments' => $departments,
         ]);
     }
 
