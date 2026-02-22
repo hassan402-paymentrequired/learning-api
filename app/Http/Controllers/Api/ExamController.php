@@ -258,10 +258,12 @@ class ExamController extends Controller
             'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
             'subject' => 'required|string',
             'count' => ['required', 'integer', 'min:1', "max:{$maxCount}"],
+            'subject_test_id' => 'nullable|integer|exists:subject_tests,id',
         ]);
 
         $examType = $request->input('exam_type');
         $subject = $request->input('subject');
+        $subjectTestId = $request->input('subject_test_id');
         $requestedCount = $request->input('count');
         
         // Enforce 5-question limit for non-subscribed users
@@ -281,9 +283,17 @@ class ExamController extends Controller
 
         // OPTIMIZATION: Use database-level filtering and bulk operations
         // Step 1: Get question IDs first (lightweight query)
-        $questionIds = Question::where('subject_id', $subjectModel->id)
-            ->whereJsonContains('exam_types', $examType)
-            ->inRandomOrder()
+        $query = Question::where('subject_id', $subjectModel->id)
+            ->whereJsonContains('exam_types', $examType);
+
+        // When subject_test_id provided (DLI), filter to questions belonging to that test
+        if ($subjectTestId) {
+            $query->whereHas('subjectTests', function ($q) use ($subjectTestId) {
+                $q->where('subject_tests.id', $subjectTestId);
+            });
+        }
+
+        $questionIds = $query->inRandomOrder()
             ->limit($count)
             ->pluck('id')
             ->toArray();
@@ -487,6 +497,7 @@ class ExamController extends Controller
                         $q->whereJsonContains('exam_types', $request->exam_type);
                     });
             })
+            ->with('tests:id,subject_id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'slug']);
 

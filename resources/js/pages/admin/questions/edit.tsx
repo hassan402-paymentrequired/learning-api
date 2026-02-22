@@ -33,6 +33,7 @@ interface Question {
         id: number;
         name: string;
     } | null;
+    subject_tests?: { id: number }[];
 }
 
 interface Subject {
@@ -46,10 +47,18 @@ interface Department {
     name: string;
 }
 
+interface SubjectTest {
+    id: number;
+    subject_id: number;
+    name: string;
+    order: number;
+}
+
 interface Props {
     question: Question;
     subjects: Subject[];
     departments: Department[];
+    subjectTests: SubjectTest[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -57,7 +66,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Edit Question', href: '#' },
 ];
 
-export default function EditQuestion({ question, subjects, departments }: Props) {
+export default function EditQuestion({ question, subjects, departments, subjectTests }: Props) {
     console.log('summitted')
     // Get department_id from question's subject if it exists
     const initialDepartmentId = question.subject?.department_id || null;
@@ -79,12 +88,18 @@ export default function EditQuestion({ question, subjects, departments }: Props)
             is_correct: a.is_correct,
             order: a.order,
         })),
+        test_ids: ((question as any).subject_tests ?? (question as any).subjectTests ?? []).map((t: { id: number }) => t.id),
     });
 
     // Filter subjects based on selected department when DLI/UNILAG is selected
     const filteredSubjects = data.exam_types.some(type => type === 'DLI' || type === 'UNILAG') && data.department_id
         ? subjects.filter(subject => subject.department_id === data.department_id)
         : subjects;
+
+    // Tests for the selected subject (only for DLI)
+    const testsForSubject = data.exam_types.includes('DLI') && data.subject_id
+        ? subjectTests.filter(t => t.subject_id === parseInt(data.subject_id, 10))
+        : [];
 
     const addAnswer = () => {
         const orders = ['A', 'B', 'C', 'D', 'E'];
@@ -117,7 +132,6 @@ export default function EditQuestion({ question, subjects, departments }: Props)
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('summitted')
         patch(admin.questions.update({ question: question.id }).url, {
             forceFormData: !!data.image,
             transform: (formData) => {
@@ -166,7 +180,11 @@ export default function EditQuestion({ question, subjects, departments }: Props)
                                                         if (!hasDliOrUnilag) {
                                                             setData('department_id', null);
                                                             setData('subject_id', '');
+                                                            setData('test_ids', []);
                                                         }
+                                                    }
+                                                    if (!checked && type === 'DLI') {
+                                                        setData('test_ids', []);
                                                     }
                                                 }}
                                             />
@@ -190,7 +208,8 @@ export default function EditQuestion({ question, subjects, departments }: Props)
                                         value={data.department_id?.toString() || ''}
                                         onValueChange={(value) => {
                                             setData('department_id', value ? parseInt(value) : null);
-                                            setData('subject_id', ''); // Clear subject when department changes
+                                            setData('subject_id', '');
+                                            setData('test_ids', []);
                                         }}
                                         required
                                     >
@@ -219,7 +238,10 @@ export default function EditQuestion({ question, subjects, departments }: Props)
                                 <Label htmlFor="subject_id">Subject *</Label>
                                 <Select
                                     value={data.subject_id}
-                                    onValueChange={(value) => setData('subject_id', value)}
+                                    onValueChange={(value) => {
+                                        setData('subject_id', value);
+                                        setData('test_ids', []);
+                                    }}
                                     required
                                     disabled={filteredSubjects.length === 0}
                                 >
@@ -247,6 +269,42 @@ export default function EditQuestion({ question, subjects, departments }: Props)
                                 )}
                                 <InputError message={errors.subject_id} />
                             </div>
+
+                            {/* Tests multi-select: only when exam type is DLI and subject is selected */}
+                            {data.exam_types.includes('DLI') && data.subject_id && (
+                                <div className="grid gap-2">
+                                    <Label>Tests (optional)</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Assign this question to one or more tests. Only shown for DLI questions.
+                                    </p>
+                                    {testsForSubject.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground py-2">
+                                            No tests yet for this subject. Go to Subjects → Manage Tests to add tests.
+                                        </p>
+                                    ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                            {testsForSubject.map((test) => (
+                                                <label
+                                                    key={test.id}
+                                                    className="flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <Checkbox
+                                                        checked={data.test_ids.includes(test.id)}
+                                                        onCheckedChange={(checked) => {
+                                                            const next = checked
+                                                                ? [...data.test_ids, test.id]
+                                                                : data.test_ids.filter((id) => id !== test.id);
+                                                            setData('test_ids', next);
+                                                        }}
+                                                    />
+                                                    <span className="text-sm">{test.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <InputError message={(errors as any).test_ids} />
+                                </div>
+                            )}
 
                             <div className="grid gap-2">
                                 <Label htmlFor="question_text">Question Text *</Label>

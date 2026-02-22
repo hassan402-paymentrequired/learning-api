@@ -86,6 +86,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [App\Http\Controllers\Admin\SubjectController::class, 'index'])->name('index');
             Route::get('/create', [App\Http\Controllers\Admin\SubjectController::class, 'create'])->name('create');
             Route::post('/', [App\Http\Controllers\Admin\SubjectController::class, 'store'])->name('store');
+            Route::get('/{subject}/tests', [App\Http\Controllers\Admin\SubjectTestController::class, 'index'])->name('tests.index');
+            Route::get('/{subject}/tests/create', [App\Http\Controllers\Admin\SubjectTestController::class, 'create'])->name('tests.create');
+            Route::post('/{subject}/tests', [App\Http\Controllers\Admin\SubjectTestController::class, 'store'])->name('tests.store');
+            Route::get('/{subject}/tests/{subject_test}/edit', [App\Http\Controllers\Admin\SubjectTestController::class, 'edit'])->name('tests.edit');
+            Route::patch('/{subject}/tests/{subject_test}', [App\Http\Controllers\Admin\SubjectTestController::class, 'update'])->name('tests.update');
+            Route::delete('/{subject}/tests/{subject_test}', [App\Http\Controllers\Admin\SubjectTestController::class, 'destroy'])->name('tests.destroy');
             Route::get('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'show'])->name('show');
             Route::get('/{subject}/edit', [App\Http\Controllers\Admin\SubjectController::class, 'edit'])->name('edit');
             Route::patch('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'update'])->name('update');

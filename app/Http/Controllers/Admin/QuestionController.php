@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Subject;
+use App\Models\SubjectTest;
 use App\Models\Question;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -66,10 +67,15 @@ class QuestionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'department_id']);
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $subjectTests = SubjectTest::with('subject:id,name')
+            ->orderBy('subject_id')
+            ->orderBy('order')
+            ->get(['id', 'subject_id', 'name', 'order']);
 
         return Inertia::render('admin/questions/create', [
             'subjects' => $subjects,
             'departments' => $departments,
+            'subjectTests' => $subjectTests,
         ]);
     }
 
@@ -97,6 +103,12 @@ class QuestionController extends Controller
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
         ];
+
+        // When DLI is selected, allow optional test_ids (subject tests for this subject)
+        if (in_array('DLI', $request->input('exam_types', []))) {
+            $rules['test_ids'] = 'nullable|array';
+            $rules['test_ids.*'] = 'integer|exists:subject_tests,id';
+        }
 
         // Conditional validation based on question type
         if ($request->question_type === 'multiple_choice') {
@@ -161,6 +173,17 @@ class QuestionController extends Controller
                 'is_active' => true, // New questions are active by default
             ]);
 
+            // Sync subject tests when DLI is selected (only tests that belong to this subject)
+            if (in_array('DLI', $validated['exam_types']) && !empty($validated['test_ids'] ?? [])) {
+                $validTestIds = SubjectTest::where('subject_id', $validated['subject_id'])
+                    ->whereIn('id', $validated['test_ids'])
+                    ->pluck('id')
+                    ->toArray();
+                $question->subjectTests()->sync($validTestIds);
+            } else {
+                $question->subjectTests()->sync([]);
+            }
+
             Log::info('Question created successfully', [
                 'question_id' => $question->id,
             ]);
@@ -218,12 +241,16 @@ class QuestionController extends Controller
      */
     public function edit(Question $question)
     {
-        $question->load('answers', 'subject', 'subject.department');
+        $question->load('answers', 'subject', 'subject.department', 'subjectTests');
         $subjects = Subject::where('is_active', true)
             ->with('department:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'department_id']);
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $subjectTests = SubjectTest::with('subject:id,name')
+            ->orderBy('subject_id')
+            ->orderBy('order')
+            ->get(['id', 'subject_id', 'name', 'order']);
 
         // Ensure exam_types is an array
         if (!$question->exam_types || !is_array($question->exam_types)) {
@@ -234,6 +261,7 @@ class QuestionController extends Controller
             'question' => $question,
             'subjects' => $subjects,
             'departments' => $departments,
+            'subjectTests' => $subjectTests,
         ]);
     }
 
@@ -255,9 +283,15 @@ class QuestionController extends Controller
             'question_text' => 'required|string',
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
-            'exam_types' => 'required|array|min:1',
-            'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
-        ];
+        'exam_types' => 'required|array|min:1',
+        'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+    ];
+
+        // When DLI is selected, allow optional test_ids
+        if (in_array('DLI', $request->input('exam_types', []))) {
+            $rules['test_ids'] = 'nullable|array';
+            $rules['test_ids.*'] = 'integer|exists:subject_tests,id';
+        }
 
         // Conditional validation based on question type
         if ($request->question_type === 'multiple_choice') {
@@ -327,6 +361,17 @@ class QuestionController extends Controller
             'exam_types' => $validated['exam_types'],
             'image' => $validated['image'],
         ]);
+
+        // Sync subject tests when DLI is selected
+        if (in_array('DLI', $validated['exam_types']) && array_key_exists('test_ids', $validated)) {
+            $validTestIds = SubjectTest::where('subject_id', $validated['subject_id'])
+                ->whereIn('id', $validated['test_ids'] ?? [])
+                ->pluck('id')
+                ->toArray();
+            $question->subjectTests()->sync($validTestIds);
+        } else {
+            $question->subjectTests()->sync([]);
+        }
 
         if ($validated['question_type'] === 'multiple_choice') {
             // Get existing answer IDs

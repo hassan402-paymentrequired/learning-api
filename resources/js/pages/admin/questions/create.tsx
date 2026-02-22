@@ -38,9 +38,17 @@ interface Department {
     name: string;
 }
 
+interface SubjectTest {
+    id: number;
+    subject_id: number;
+    name: string;
+    order: number;
+}
+
 interface Props {
     subjects: Subject[];
     departments: Department[];
+    subjectTests: SubjectTest[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -48,7 +56,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Create Question', href: '#' },
 ];
 
-export default function CreateQuestion({ subjects, departments }: Props) {
+export default function CreateQuestion({ subjects, departments, subjectTests }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         department_id: null as number | null,
         subject_id: '',
@@ -62,6 +70,7 @@ export default function CreateQuestion({ subjects, departments }: Props) {
         explanation: '',
         expected_answer: '',
         exam_types: [] as string[],
+        test_ids: [] as number[],
         answers: [
             { answer_text: '', is_correct: false, order: 'A' },
             { answer_text: '', is_correct: false, order: 'B' },
@@ -72,6 +81,11 @@ export default function CreateQuestion({ subjects, departments }: Props) {
     const filteredSubjects = data.exam_types.some(type => type === 'DLI' || type === 'UNILAG') && data.department_id
         ? subjects.filter(subject => subject.department_id === data.department_id)
         : subjects;
+
+    // Tests for the selected subject (only for DLI) – show multi-select only when exam type is DLI
+    const testsForSubject = data.exam_types.includes('DLI') && data.subject_id
+        ? subjectTests.filter(t => t.subject_id === parseInt(data.subject_id, 10))
+        : [];
 
     // Clear answers when question type changes to non-multiple_choice
     useEffect(() => {
@@ -236,13 +250,17 @@ export default function CreateQuestion({ subjects, departments }: Props) {
                                                               );
                                                         setData('exam_types', newExamTypes);
                                                         
-                                                        // Clear department and subject if DLI/UNILAG is unchecked
+                                                        // Clear department, subject and test_ids if DLI/UNILAG is unchecked
                                                         if (!checked && (type === 'DLI' || type === 'UNILAG')) {
                                                             const hasDliOrUnilag = newExamTypes.some(t => t === 'DLI' || t === 'UNILAG');
                                                             if (!hasDliOrUnilag) {
                                                                 setData('department_id', null);
                                                                 setData('subject_id', '');
+                                                                setData('test_ids', []);
                                                             }
+                                                        }
+                                                        if (!checked && type === 'DLI') {
+                                                            setData('test_ids', []);
                                                         }
                                                     }}
                                                 />
@@ -271,7 +289,8 @@ export default function CreateQuestion({ subjects, departments }: Props) {
                                         value={data.department_id?.toString() || ''}
                                         onValueChange={(value) => {
                                             setData('department_id', value ? parseInt(value) : null);
-                                            setData('subject_id', ''); // Clear subject when department changes
+                                            setData('subject_id', '');
+                                            setData('test_ids', []);
                                         }}
                                         required
                                     >
@@ -300,9 +319,10 @@ export default function CreateQuestion({ subjects, departments }: Props) {
                                 <Label htmlFor="subject_id">Subject *</Label>
                                 <Select
                                     value={data.subject_id}
-                                    onValueChange={(value) =>
-                                        setData('subject_id', value)
-                                    }
+                                        onValueChange={(value) => {
+                                            setData('subject_id', value);
+                                            setData('test_ids', []); // Reset tests when subject changes
+                                        }}
                                     required
                                     disabled={filteredSubjects.length === 0}
                                 >
@@ -333,6 +353,42 @@ export default function CreateQuestion({ subjects, departments }: Props) {
                                 )}
                                 <InputError message={errors.subject_id} />
                             </div>
+
+                            {/* Tests multi-select: only when exam type is DLI and subject is selected */}
+                            {data.exam_types.includes('DLI') && data.subject_id && (
+                                <div className="grid gap-2">
+                                    <Label>Tests (optional)</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Assign this question to one or more tests. Only shown for DLI questions. Create tests from the subject page.
+                                    </p>
+                                    {testsForSubject.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground py-2">
+                                            No tests yet for this subject. Go to Subjects → {filteredSubjects.find(s => s.id.toString() === data.subject_id)?.name} → Manage Tests to add tests.
+                                        </p>
+                                    ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                            {testsForSubject.map((test) => (
+                                                <label
+                                                    key={test.id}
+                                                    className="flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <Checkbox
+                                                        checked={data.test_ids.includes(test.id)}
+                                                        onCheckedChange={(checked) => {
+                                                            const next = checked
+                                                                ? [...data.test_ids, test.id]
+                                                                : data.test_ids.filter((id) => id !== test.id);
+                                                            setData('test_ids', next);
+                                                        }}
+                                                    />
+                                                    <span className="text-sm">{test.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <InputError message={(errors as any).test_ids} />
+                                </div>
+                            )}
 
                             <div className="grid gap-2">
                                 <Label htmlFor="question_text">

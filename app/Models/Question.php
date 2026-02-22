@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Question extends Model
@@ -50,6 +51,15 @@ class Question extends Model
     public function answers(): HasMany
     {
         return $this->hasMany(Answer::class)->orderBy('order');
+    }
+
+    /**
+     * Get the subject tests (DLI tests) this question belongs to (many-to-many).
+     */
+    public function subjectTests(): BelongsToMany
+    {
+        return $this->belongsToMany(SubjectTest::class, 'question_subject_test')
+            ->withTimestamps();
     }
 
     /**

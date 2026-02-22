@@ -44,6 +44,14 @@ class Subject extends Model
         return $this->hasMany(Question::class);
     }
 
+    /**
+     * Get the tests for the subject (e.g. Test 1, Test 2 for DLI).
+     */
+    public function tests(): HasMany
+    {
+        return $this->hasMany(SubjectTest::class);
+    }
+
     protected static function boot()
     {
         parent::boot();

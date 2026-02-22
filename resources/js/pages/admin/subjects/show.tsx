@@ -181,6 +181,11 @@ export default function SubjectShow({ subject, questions }: Props) {
                     </div>
                     <div className="flex gap-2">
                         <Button asChild variant="outline">
+                            <Link href={`/admin/subjects/${subject.id}/tests`}>
+                                Manage Tests
+                            </Link>
+                        </Button>
+                        <Button asChild variant="outline">
                             <Link href={admin.subjects.edit(subject.id).url}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Subject
