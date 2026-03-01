@@ -275,6 +275,125 @@ class ExamAttemptController extends Controller
     }
 
     /**
+     * Submit multiple answers in bulk.
+     */
+    public function submitAnswersBulk(Request $request, ExamAttempt $attempt)
+    {
+        if ($attempt->user_id !== auth()->id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized',
+            ], 403);
+        }
+
+        if ($attempt->status !== 'in_progress') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Exam attempt is not in progress',
+            ], 400);
+        }
+
+        $request->validate([
+            'answers' => 'required|array',
+            'answers.*.question_id' => 'required|exists:questions,id',
+            'answers.*.answer_id' => 'nullable|exists:answers,id',
+            'answers.*.answer_text' => 'nullable|string',
+            'answers.*.time_spent' => 'nullable|integer|min:0',
+        ]);
+
+        $questionIds = collect($request->answers)->pluck('question_id')->unique()->toArray();
+        $questions = \App\Models\Question::whereIn('id', $questionIds)->with('answers')->get()->keyBy('id');
+
+        // Fetch existing answers to update instead of create newly
+        $existingAnswers = \App\Models\UserAnswer::where('exam_attempt_id', $attempt->id)
+            ->whereIn('question_id', $questionIds)
+            ->get()
+            ->keyBy('question_id');
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+
+        try {
+            foreach ($request->answers as $answerData) {
+                $questionId = $answerData['question_id'] ?? null;
+                if (!$questionId || !$questions->has($questionId)) continue;
+
+                $question = $questions[$questionId];
+                $answerText = $answerData['answer_text'] ?? null;
+                $answerId = $answerData['answer_id'] ?? null;
+                $timeSpent = $answerData['time_spent'] ?? 0;
+
+                $finalAnswer = null;
+
+                if (in_array($question->question_type, ['text_input', 'numeric_input'])) {
+                    if (empty($answerText)) continue;
+
+                    $userAnswerText = trim($answerText);
+                    $expectedAnswer = trim($question->expected_answer ?? '');
+
+                    $isCorrect = false;
+                    if ($question->question_type === 'numeric_input') {
+                        $userNum = is_numeric($userAnswerText) ? (float)$userAnswerText : null;
+                        $expectedNum = is_numeric($expectedAnswer) ? (float)$expectedAnswer : null;
+                        $isCorrect = $userNum !== null && $expectedNum !== null && abs($userNum - $expectedNum) < 0.0001;
+                    } else {
+                        $isCorrect = strtolower($userAnswerText) === strtolower($expectedAnswer);
+                    }
+
+                    $finalAnswer = $question->answers()->firstOrCreate(
+                        ['answer_text' => $userAnswerText],
+                        ['is_correct' => $isCorrect, 'order' => 'A']
+                    );
+
+                    if (!$finalAnswer->wasRecentlyCreated) {
+                        $finalAnswer->update(['is_correct' => $isCorrect]);
+                    }
+                } else {
+                    if (!$answerId) continue;
+                    // For multiple choice, we get the answer from the DB or the loaded relation
+                    $finalAnswer = $question->answers->where('id', $answerId)->first();
+                    if (!$finalAnswer) {
+                        $finalAnswer = $question->answers()->find($answerId);
+                    }
+                }
+
+                if (!$finalAnswer) continue;
+
+                if ($existingAnswers->has($questionId)) {
+                    $existing = $existingAnswers[$questionId];
+                    $existing->update([
+                        'answer_id' => $finalAnswer->id,
+                        'is_correct' => $finalAnswer->is_correct,
+                        'time_spent' => $timeSpent > 0 ? $timeSpent : $existing->time_spent,
+                    ]);
+                } else {
+                    \App\Models\UserAnswer::create([
+                        'exam_attempt_id' => $attempt->id,
+                        'question_id' => $question->id,
+                        'answer_id' => $finalAnswer->id,
+                        'is_correct' => $finalAnswer->is_correct,
+                        'time_spent' => $timeSpent,
+                    ]);
+                }
+            }
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Answers submitted successfully',
+            ]);
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit answers',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Complete an exam attempt.
      */
     public function complete(Request $request, ExamAttempt $attempt)
@@ -443,7 +562,7 @@ class ExamAttemptController extends Controller
         $attempt->load('exam');
 
         $results = $attempt->userAnswers()
-            ->with(['question.answers', 'answer', 'question.exam'])
+            ->with(['question.answers', 'answer', 'question.exam', 'question.subject'])
             ->get()
             ->map(function ($userAnswer) {
                 $question = $userAnswer->question;
@@ -496,6 +615,7 @@ class ExamAttemptController extends Controller
                         'explanation' => $question->explanation,
                         'expected_answer' => $question->expected_answer,
                         'image' => $question->image,
+                        'subject' => $question->subject->name ?? ($question->exam->subject ?? null),
                         'answers' => $questionAnswers,
                     ],
                     'user_answer' => $userAnswerData,
@@ -511,10 +631,8 @@ class ExamAttemptController extends Controller
             // Group results by subject based on exam subject
             $resultsBySubject = [];
             foreach ($results as $result) {
-                // Get the exam for this question to find its subject
-                $question = \App\Models\Question::with('exam')->find($result['question']['id']);
-                if ($question && $question->exam) {
-                    $examSubject = $question->exam->subject;
+                $examSubject = trim($result['question']['subject'] ?? '');
+                if ($examSubject) {
                     if (!isset($resultsBySubject[$examSubject])) {
                         $resultsBySubject[$examSubject] = [];
                     }
@@ -524,11 +642,26 @@ class ExamAttemptController extends Controller
 
             // Calculate analytics for each subject
             foreach ($attempt->subjects as $subjectData) {
-                $subject = is_array($subjectData) ? $subjectData['subject'] : $subjectData;
-                $subjectResults = $resultsBySubject[$subject] ?? [];
+                $subject = is_array($subjectData) ? ($subjectData['subject'] ?? '') : $subjectData;
+                $subject = trim($subject);
+                
+                // Try to find the expected count in the metadata
+                $expectedCount = 0;
+                if (is_array($subjectData)) {
+                    $expectedCount = $subjectData['question_count'] ?? ($subjectData['count'] ?? 0);
+                }
+                
+                // Find results for this subject (case-insensitive and trimmed)
+                $subjectResults = [];
+                foreach ($resultsBySubject as $subjName => $items) {
+                    if (strcasecmp(trim($subjName), $subject) === 0) {
+                        $subjectResults = array_merge($subjectResults, $items);
+                    }
+                }
                 
                 $subjectCorrect = collect($subjectResults)->where('is_correct', true)->count();
-                $subjectTotal = count($subjectResults);
+                // Use expectedCount if available, otherwise fallback to results count
+                $subjectTotal = $expectedCount > 0 ? $expectedCount : count($subjectResults);
                 
                 $subjectAnalytics[] = [
                     'subject' => $subject,
