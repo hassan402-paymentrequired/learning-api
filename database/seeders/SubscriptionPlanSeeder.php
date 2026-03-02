@@ -20,7 +20,7 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Yearly Plan',
                 'description' => 'Full access to all exam questions, practice tests, and past questions for 1 year.',
-                'price' => 2000.00,
+                'price' => 2500.00,
                 'interval' => 'year',
                 'interval_count' => 1,
                 'currency' => 'NGN',
