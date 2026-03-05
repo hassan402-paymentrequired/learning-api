@@ -57,6 +57,7 @@ class SubscriptionPinController extends Controller
             'subscription_status'    => 'active',
             'subscription_type'      => 'pin',
             'subscription_expires_at'=> $expiresAt,
+            'subscription_device_id' => null,
         ]);
 
         // Mark PIN as consumed

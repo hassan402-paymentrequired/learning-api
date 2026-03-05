@@ -150,11 +150,11 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Check if user has active subscription valid for this client (by IP).
-     * Subscription is only valid from the IP/device that was used when subscribing.
-     * subscription_device_id stores the client IP. If not set, returns true for backward compatibility.
+     * Check if user has active subscription valid for this client (by Device ID).
+     * Subscription is only valid from the device that was used when subscribing.
+     * subscription_device_id stores the device ID. If not set, returns true for backward compatibility.
      */
-    public function hasActiveSubscriptionForDevice(?string $clientIp): bool
+    public function hasActiveSubscriptionForDevice(?string $deviceId): bool
     {
         if (!$this->hasActiveSubscription()) {
             return false;
@@ -162,7 +162,7 @@ class User extends Authenticatable implements JWTSubject
         if (empty($this->subscription_device_id)) {
             return true;
         }
-        return $clientIp !== null && $clientIp !== '' && $this->subscription_device_id === $clientIp;
+        return $deviceId !== null && $deviceId !== '' && $this->subscription_device_id === $deviceId;
     }
 
     /**

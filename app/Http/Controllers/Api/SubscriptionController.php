@@ -281,6 +281,7 @@ class SubscriptionController extends Controller
                 $user->update([
                     'subscription_status' => 'active',
                     'subscription_expires_at' => $expiresAt,
+                    'subscription_device_id' => null,
                 ]);
 
                 // Process referral rewards: referrer gets 500 credit when referred user subscribes
@@ -376,6 +377,7 @@ class SubscriptionController extends Controller
             $user->update([
                 'subscription_status' => 'active',
                 'subscription_expires_at' => $expiresAt,
+                'subscription_device_id' => null,
             ]);
 
             // Process referral rewards: referrer gets 500 credit when referred user subscribes
@@ -417,13 +419,13 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * Bind the current request IP to the user's subscription.
-     * Call this after successful payment so subscription is only valid from this IP/device.
+     * Bind the current device ID to the user's subscription.
+     * Call this after successful payment so subscription is only valid from this device.
      */
     public function registerDevice(Request $request)
     {
         $user = auth()->user();
-        $clientIp = $request->ip() ?? '';
+        $deviceId = $request->header('X-Device-Id') ?? $request->ip() ?? '';
 
         if (!$user->hasActiveSubscription()) {
             return response()->json([
@@ -432,8 +434,8 @@ class SubscriptionController extends Controller
             ], 400);
         }
 
-        // Already bound to a different IP
-        if ($user->subscription_device_id !== null && $user->subscription_device_id !== $clientIp) {
+        // Already bound to a different ID
+        if ($user->subscription_device_id !== null && $user->subscription_device_id !== $deviceId) {
             return response()->json([
                 'success' => false,
                 'message' => 'Your subscription is tied to another device. You can only use your subscription on the device you used when subscribing.',
@@ -441,7 +443,7 @@ class SubscriptionController extends Controller
             ], 403);
         }
 
-        $user->update(['subscription_device_id' => $clientIp]);
+        $user->update(['subscription_device_id' => $deviceId]);
 
         return response()->json([
             'success' => true,
@@ -456,10 +458,16 @@ class SubscriptionController extends Controller
     public function status(Request $request)
     {
         $user = auth()->user();
-        $clientIp = $request->ip() ?? '';
+        $deviceId = $request->header('X-Device-Id') ?? $request->ip() ?? '';
+
+        // Auto-bind device ID if the user has an active subscription but hasn't bound a device yet
+        // This is especially useful for manual admin activations where the client never explicitly calls registerDevice.
+        if ($user->subscription_status === 'active' && empty($user->subscription_device_id) && !empty($deviceId)) {
+            $user->update(['subscription_device_id' => $deviceId]);
+        }
 
         $activeSubscription = $user->activeSubscription;
-        $hasActiveForDevice = $user->hasActiveSubscriptionForDevice($clientIp);
+        $hasActiveForDevice = $user->hasActiveSubscriptionForDevice($deviceId);
 
         return response()->json([
             'success' => true,

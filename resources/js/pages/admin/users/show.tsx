@@ -96,7 +96,6 @@ export default function ShowUser({ user, stats, practiceHistory, subjectPerforma
     const [generatePinOpen, setGeneratePinOpen] = useState(false);
     const [expiryOpen, setExpiryOpen] = useState(false);
 
-    console.log(stats)
 
     const { data: pinForm, setData: setPinData, post: postPin, processing: pinProcessing, reset: resetPin, errors: pinErrors } = useForm({
         expires_at: '',
@@ -114,10 +113,10 @@ export default function ShowUser({ user, stats, practiceHistory, subjectPerforma
         return `${minutes}m`;
     };
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            toast.success(`PIN ${text} copied to clipboard!`);
-        });
+    const copyToClipboard = async (text: string) => {
+        console.log(text)
+        await navigator.clipboard.writeText(text);
+        toast.success(`PIN ${text} copied to clipboard!`);
     };
 
     const handleGeneratePin = (e: React.FormEvent) => {

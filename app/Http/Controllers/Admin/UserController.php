@@ -244,6 +244,7 @@ class UserController extends Controller
                 'subscription_status'    => 'active',
                 'subscription_type'      => 'manual',
                 'subscription_expires_at'=> $expiresAt,
+                'subscription_device_id' => null,
             ]);
             $message = "{$user->name}'s subscription activated until {$expiresAt->toDateString()}.";
         }
@@ -264,6 +265,7 @@ class UserController extends Controller
         $user->update([
             'subscription_status'    => 'active',
             'subscription_expires_at'=> \Carbon\Carbon::parse($request->expires_at)->endOfDay(),
+            'subscription_device_id' => null,
         ]);
 
         return redirect()->route('admin.users.show', $user)
