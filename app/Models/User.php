@@ -24,6 +24,7 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'password',
         'subscription_status',
+        'subscription_type',
         'referral_code',
         'referred_by',
         'paystack_customer_code',
@@ -85,6 +86,14 @@ class User extends Authenticatable implements JWTSubject
     public function subscriptions()
     {
         return $this->hasMany(Subscription::class);
+    }
+
+    /**
+     * Get the subscription PINs generated for this user.
+     */
+    public function subscriptionPins()
+    {
+        return $this->hasMany(SubscriptionPin::class);
     }
 
     /**

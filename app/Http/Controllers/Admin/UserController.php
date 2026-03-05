@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\ExamAttempt;
+use App\Models\SubscriptionPin;
+use App\Models\SubscriptionSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Inertia\Inertia;
 
 class UserController extends Controller
@@ -25,6 +27,11 @@ class UserController extends Controller
             });
         }
 
+        // Filter by subscription status
+        if ($request->filled('subscription_status')) {
+            $query->where('subscription_status', $request->subscription_status);
+        }
+
         // Filter by registration date
         if ($request->has('date_from')) {
             $query->where('created_at', '>=', $request->date_from);
@@ -37,8 +44,8 @@ class UserController extends Controller
         $users = $query->orderBy('created_at', 'desc')->paginate(15);
 
         return Inertia::render('admin/users/index', [
-            'users' => $users,
-            'filters' => $request->only(['search', 'date_from', 'date_to']),
+            'users'   => $users,
+            'filters' => $request->only(['search', 'date_from', 'date_to', 'subscription_status']),
         ]);
     }
 
@@ -51,13 +58,13 @@ class UserController extends Controller
 
         // Get user statistics
         $stats = [
-            'total_attempts' => $user->examAttempts()->count(),
+            'total_attempts'     => $user->examAttempts()->count(),
             'completed_attempts' => $user->examAttempts()->where('status', 'completed')->count(),
-            'average_score' => $user->examAttempts()
+            'average_score'      => (int)$user->examAttempts()
                 ->where('status', 'completed')
                 ->selectRaw('AVG((correct_answers * 100.0) / NULLIF(total_questions, 0)) as avg_score')
                 ->value('avg_score') ?? 0,
-            'total_time_spent' => $user->examAttempts()
+            'total_time_spent'   => $user->examAttempts()
                 ->where('status', 'completed')
                 ->sum('time_spent'),
         ];
@@ -70,16 +77,16 @@ class UserController extends Controller
             ->get()
             ->map(function ($attempt) {
                 return [
-                    'id' => $attempt->id,
-                    'exam_title' => $attempt->exam->title,
-                    'exam_type' => $attempt->exam->exam_type,
-                    'status' => $attempt->status,
-                    'score' => $attempt->score,
+                    'id'              => $attempt->id,
+                    'exam_title'      => $attempt->exam->title,
+                    'exam_type'       => $attempt->exam->exam_type,
+                    'status'          => $attempt->status,
+                    'score'           => $attempt->score,
                     'correct_answers' => $attempt->correct_answers,
                     'total_questions' => $attempt->total_questions,
-                    'percentage' => $attempt->percentage,
-                    'started_at' => $attempt->started_at,
-                    'completed_at' => $attempt->completed_at,
+                    'percentage'      => $attempt->percentage,
+                    'started_at'      => $attempt->started_at,
+                    'completed_at'    => $attempt->completed_at,
                 ];
             });
 
@@ -94,11 +101,32 @@ class UserController extends Controller
             ->groupBy('exams.subject')
             ->get();
 
+        // Get subscription PINs for this user
+        $subscriptionPins = $user->subscriptionPins()
+            ->with('generatedBy:id,name')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($pin) => [
+                'id'           => $pin->id,
+                'pin'          => $pin->pin,
+                'status'       => $pin->status,
+                'generated_by' => $pin->generatedBy?->name,
+                'used_at'      => $pin->used_at,
+                'expires_at'   => $pin->expires_at,
+                'created_at'   => $pin->created_at,
+            ]);
+
         return Inertia::render('admin/users/show', [
-            'user' => $user,
-            'stats' => $stats,
-            'practiceHistory' => $practiceHistory,
+            'user'               => array_merge($user->toArray(), [
+                'subscription_status'    => $user->subscription_status,
+                'subscription_type'      => $user->subscription_type,
+                'subscription_expires_at'=> $user->subscription_expires_at,
+            ]),
+            'stats'              => $stats,
+            'practiceHistory'    => $practiceHistory,
             'subjectPerformance' => $subjectPerformance,
+            'subscriptionPins'   => $subscriptionPins,
+            'flash'              => session('generated_pin') ? ['generated_pin' => session('generated_pin')] : null,
         ]);
     }
 
@@ -118,8 +146,8 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $user->id,
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users,email,' . $user->id,
             'is_admin' => 'boolean',
         ]);
 
@@ -140,6 +168,123 @@ class UserController extends Controller
 
         return redirect()->route('admin.users.index')
             ->with('success', $user->is_admin ? 'User granted admin access.' : 'User admin access revoked.');
+    }
+
+    /**
+     * Generate a 6-digit subscription PIN for the user.
+     */
+    public function generatePin(Request $request, User $user)
+    {
+        // Generate a unique 6-digit PIN
+        do {
+            $pin = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        } while (SubscriptionPin::where('pin', $pin)->where('status', 'unused')->exists());
+
+        $expiresAt = null;
+        if ($request->filled('expires_at')) {
+            $expiresAt = $request->date('expires_at');
+        }
+
+        SubscriptionPin::create([
+            'user_id'      => $user->id,
+            'generated_by' => auth()->id(),
+            'pin'          => $pin,
+            'status'       => 'unused',
+            'expires_at'   => $expiresAt,
+            'notes'        => $request->input('notes'),
+        ]);
+
+        return redirect()->route('admin.users.show', $user)
+            ->with('generated_pin', $pin)
+            ->with('success', "PIN {$pin} generated successfully for {$user->name}.");
+    }
+
+    /**
+     * Cancel (invalidate) a specific subscription PIN.
+     */
+    public function cancelPin(User $user, SubscriptionPin $pin)
+    {
+        if ($pin->user_id !== $user->id) {
+            abort(403, 'PIN does not belong to this user.');
+        }
+
+        if ($pin->status !== 'unused') {
+            return back()->withErrors(['pin' => 'Only unused PINs can be cancelled.']);
+        }
+
+        $pin->update(['status' => 'cancelled']);
+
+        return redirect()->route('admin.users.show', $user)
+            ->with('success', 'PIN cancelled successfully.');
+    }
+
+    /**
+     * Manually activate or cancel a user's subscription.
+     */
+    public function toggleSubscription(Request $request, User $user)
+    {
+        if ($user->subscription_status === 'active' && $user->subscription_expires_at?->isFuture()) {
+            // Cancel subscription
+            $user->update([
+                'subscription_status' => 'cancelled',
+            ]);
+            $message = "{$user->name}'s subscription has been cancelled.";
+        } else {
+            // Activate subscription
+            $days     = (int) SubscriptionSetting::get('default_subscription_days', 365);
+            $globalExpiry = SubscriptionSetting::get('global_expiry_date');
+
+            if ($globalExpiry) {
+                $expiresAt = \Carbon\Carbon::parse($globalExpiry)->endOfDay();
+            } else {
+                $expiresAt = now()->addDays($days);
+            }
+
+            $user->update([
+                'subscription_status'    => 'active',
+                'subscription_type'      => 'manual',
+                'subscription_expires_at'=> $expiresAt,
+            ]);
+            $message = "{$user->name}'s subscription activated until {$expiresAt->toDateString()}.";
+        }
+
+        return redirect()->route('admin.users.show', $user)
+            ->with('success', $message);
+    }
+
+    /**
+     * Set a specific expiry date for the user's subscription.
+     */
+    public function setExpiry(Request $request, User $user)
+    {
+        $request->validate([
+            'expires_at' => 'required|date|after:today',
+        ]);
+
+        $user->update([
+            'subscription_status'    => 'active',
+            'subscription_expires_at'=> \Carbon\Carbon::parse($request->expires_at)->endOfDay(),
+        ]);
+
+        return redirect()->route('admin.users.show', $user)
+            ->with('success', "Subscription expiry updated to {$request->expires_at}.");
+    }
+
+    /**
+     * Change the subscription type (paystack / pin / manual) for a user.
+     */
+    public function setSubscriptionType(Request $request, User $user)
+    {
+        $request->validate([
+            'subscription_type' => 'required|in:paystack,pin,manual',
+        ]);
+
+        $user->update([
+            'subscription_type' => $request->subscription_type,
+        ]);
+
+        return redirect()->route('admin.users.show', $user)
+            ->with('success', "Subscription type updated to {$request->subscription_type}.");
     }
 
     /**

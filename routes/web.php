@@ -21,7 +21,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('/{user}', [App\Http\Controllers\Admin\UserController::class, 'update'])->name('update');
             Route::post('/{user}/toggle-admin', [App\Http\Controllers\Admin\UserController::class, 'toggleAdmin'])->name('toggle-admin');
             Route::delete('/{user}', [App\Http\Controllers\Admin\UserController::class, 'destroy'])->name('destroy');
+
+            // Subscription management routes
+            Route::post('/{user}/generate-pin', [App\Http\Controllers\Admin\UserController::class, 'generatePin'])->name('generate-pin');
+            Route::delete('/{user}/pins/{pin}', [App\Http\Controllers\Admin\UserController::class, 'cancelPin'])->name('cancel-pin');
+            Route::post('/{user}/toggle-subscription', [App\Http\Controllers\Admin\UserController::class, 'toggleSubscription'])->name('toggle-subscription');
+            Route::post('/{user}/set-expiry', [App\Http\Controllers\Admin\UserController::class, 'setExpiry'])->name('set-expiry');
+            Route::post('/{user}/set-type', [App\Http\Controllers\Admin\UserController::class, 'setSubscriptionType'])->name('set-type');
         });
+
+        // Subscription settings routes
+        Route::get('subscription-settings', [App\Http\Controllers\Admin\SubscriptionSettingsController::class, 'index'])->name('subscription-settings.index');
+        Route::post('subscription-settings', [App\Http\Controllers\Admin\SubscriptionSettingsController::class, 'update'])->name('subscription-settings.update');
+        Route::post('subscription-settings/apply-global-expiry', [App\Http\Controllers\Admin\SubscriptionSettingsController::class, 'applyGlobalExpiry'])->name('subscription-settings.apply-global-expiry');
 
         // Practice Attempts routes
         Route::prefix('practice-attempts')->name('practice-attempts.')->group(function () {

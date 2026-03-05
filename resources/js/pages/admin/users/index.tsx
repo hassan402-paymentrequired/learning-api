@@ -16,6 +16,10 @@ interface User {
     email: string;
     created_at: string;
     exam_attempts_count: number;
+    subscription_status: string | null;
+    subscription_type: string | null;
+    subscription_expires_at: string | null;
+    is_admin: boolean;
 }
 
 interface Props {
@@ -33,8 +37,16 @@ interface Props {
     };
 }
 
-interface UserWithAdmin extends User {
-    is_admin?: boolean;
+interface UserWithAdmin extends User { }
+
+function SubscriptionBadge({ status, type }: { status: string | null; type: string | null }) {
+    if (status === 'active') {
+        const color = type === 'pin' ? 'bg-blue-500 hover:bg-blue-600' : type === 'manual' ? 'bg-purple-500 hover:bg-purple-600' : 'bg-green-500 hover:bg-green-600';
+        const label = type === 'pin' ? 'PIN' : type === 'manual' ? 'Manual' : 'Active';
+        return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white ${color}`}>{label}</span>;
+    }
+    if (status === 'cancelled') return <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Cancelled</span>;
+    return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">No Sub</span>;
 }
 
 export default function UsersIndex({ users, filters }: Props) {
@@ -192,6 +204,7 @@ export default function UsersIndex({ users, filters }: Props) {
                                                         {new Date(user.created_at).toLocaleDateString()}
                                                     </span>
                                                     <span>{user.exam_attempts_count} attempts</span>
+                                                    <SubscriptionBadge status={user.subscription_status} type={user.subscription_type} />
                                                 </div>
                                             </div>
                                         </div>

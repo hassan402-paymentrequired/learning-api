@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ExamAttemptController;
 use App\Http\Controllers\Api\StreakController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\SubscriptionPinController;
 use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\EmailVerificationController;
@@ -94,6 +95,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     Route::post('/subscriptions/initialize-payment', [SubscriptionController::class, 'initializePayment']);
     Route::post('/subscriptions/verify-payment', [SubscriptionController::class, 'verifyPayment']);
     Route::post('/subscriptions/register-device', [SubscriptionController::class, 'registerDevice']);
+    Route::post('/subscriptions/redeem-pin', [SubscriptionPinController::class, 'redeem']);
 
     // Referral routes
     Route::get('/referrals', [ReferralController::class, 'index']);
