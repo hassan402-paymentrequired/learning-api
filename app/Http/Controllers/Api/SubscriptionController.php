@@ -275,13 +275,7 @@ class SubscriptionController extends Controller
                     'status' => 'active',
                     'starts_at' => now(),
                     'expires_at' => $expiresAt,
-                ]);
-
-                // Update user subscription status
-                $user->update([
-                    'subscription_status' => 'active',
-                    'subscription_expires_at' => $expiresAt,
-                    'subscription_device_id' => null,
+                    'type' => 'paystack',
                 ]);
 
                 // Process referral rewards: referrer gets 500 credit when referred user subscribes
@@ -371,13 +365,7 @@ class SubscriptionController extends Controller
                 'status' => 'active',
                 'starts_at' => now(),
                 'expires_at' => $expiresAt,
-            ]);
-
-            // Update user subscription status
-            $user->update([
-                'subscription_status' => 'active',
-                'subscription_expires_at' => $expiresAt,
-                'subscription_device_id' => null,
+                'type' => 'paystack',
             ]);
 
             // Process referral rewards: referrer gets 500 credit when referred user subscribes
@@ -408,11 +396,7 @@ class SubscriptionController extends Controller
                 'subscription' => [
                     'id' => $subscription->id,
                     'status' => $subscription->status,
-                    'expires_at' => $subscription->expires_at,
-                ],
-                'user' => [
-                    'subscription_status' => $subscription->user->subscription_status,
-                    'subscription_expires_at' => $subscription->user->subscription_expires_at,
+                    'expires_at' => $subscription->expires_at->toIso8601String(),
                 ],
             ],
         ]);
@@ -425,29 +409,54 @@ class SubscriptionController extends Controller
     public function registerDevice(Request $request)
     {
         $user = auth()->user();
-        $deviceId = $request->header('X-Device-Id') ?? $request->ip() ?? '';
+        $deviceId = $request->header('X-Device-Id');
 
-        if (!$user->hasActiveSubscription()) {
+        if (empty($deviceId)) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have an active subscription to bind to this device.',
+                'message' => 'Device ID is required.',
             ], 400);
         }
 
-        // Already bound to a different ID
-        if ($user->subscription_device_id !== null && $user->subscription_device_id !== $deviceId) {
+        // Find an active subscription for this user that is NOT yet bound to any device
+        $subscription = $user->subscriptions()
+            ->where('status', 'active')
+            ->where('expires_at', '>', now())
+            ->whereNull('device_id')
+            ->orderBy('expires_at', 'desc')
+            ->first();
+
+        if (!$subscription) {
+            // Check if there's already one bound to this device
+            $existing = $user->subscriptions()
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
+                ->where('device_id', $deviceId)
+                ->first();
+
+            if ($existing) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'This device is already linked to an active subscription.',
+                ]);
+            }
+
             return response()->json([
                 'success' => false,
-                'message' => 'Your subscription is tied to another device. You can only use your subscription on the device you used when subscribing.',
-                'code' => 'SUBSCRIPTION_DEVICE_MISMATCH',
+                'message' => 'You do not have any unbound active subscriptions. Please purchase a new one for this device.',
+                'code' => 'NO_UNBOUND_SUBSCRIPTION',
             ], 403);
         }
 
-        $user->update(['subscription_device_id' => $deviceId]);
+        $subscription->update(['device_id' => $deviceId]);
 
         return response()->json([
             'success' => true,
             'message' => 'This device is now linked to your subscription.',
+            'data' => [
+                'subscription_id' => $subscription->id,
+                'expires_at' => $subscription->expires_at->toIso8601String(),
+            ]
         ]);
     }
 
@@ -458,31 +467,51 @@ class SubscriptionController extends Controller
     public function status(Request $request)
     {
         $user = auth()->user();
-        $deviceId = $request->header('X-Device-Id') ?? $request->ip() ?? '';
+        $deviceId = $request->header('X-Device-Id');
 
-        // Auto-bind device ID if the user has an active subscription but hasn't bound a device yet
-        // This is especially useful for manual admin activations where the client never explicitly calls registerDevice.
-        if ($user->subscription_status === 'active' && empty($user->subscription_device_id) && !empty($deviceId)) {
-            $user->update(['subscription_device_id' => $deviceId]);
+        // If user has an unbound active subscription, they might need to register it.
+        // But for seamless experience, if they are active, we show the status.
+        $activeSubscription = $user->activeSubscription($deviceId);
+        
+        // Auto-bind device ID if the user has an active unbound subscription
+        if (!$activeSubscription && !empty($deviceId)) {
+            $unbound = $user->subscriptions()
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
+                ->whereNull('device_id')
+                ->orderBy('expires_at', 'desc')
+                ->first();
+            
+            if ($unbound) {
+                $unbound->update(['device_id' => $deviceId]);
+                $activeSubscription = $unbound;
+            }
         }
 
-        $activeSubscription = $user->activeSubscription;
-        $hasActiveForDevice = $user->hasActiveSubscriptionForDevice($deviceId);
+        $hasActiveForDevice = $activeSubscription !== null;
+
+        // Check if there are active subscriptions on OTHER devices
+        $otherActiveCount = $user->subscriptions()
+            ->where('status', 'active')
+            ->where('expires_at', '>', now())
+            ->whereNotNull('device_id')
+            ->where('device_id', '!=', $deviceId)
+            ->count();
 
         return response()->json([
             'success' => true,
             'data' => [
                 'has_active_subscription' => $hasActiveForDevice,
-                'subscription_status' => $user->subscription_status,
-                'subscription_expires_at' => $user->subscription_expires_at,
-                'subscription_device_bound' => !empty($user->subscription_device_id),
-                'subscription' => $activeSubscription && $hasActiveForDevice ? [
+                'other_devices_active' => $otherActiveCount > 0,
+                'subscription_device_bound' => $activeSubscription && !empty($activeSubscription->device_id),
+                'subscription' => $activeSubscription ? [
                     'id' => $activeSubscription->id,
+                    'type' => $activeSubscription->type,
                     'plan' => [
                         'name' => $activeSubscription->plan->name,
                         'price' => (float) $activeSubscription->plan->price,
                     ],
-                    'expires_at' => $activeSubscription->expires_at,
+                    'expires_at' => $activeSubscription->expires_at->toIso8601String(),
                 ] : null,
             ],
         ]);

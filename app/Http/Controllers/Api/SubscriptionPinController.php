@@ -52,12 +52,18 @@ class SubscriptionPinController extends Controller
             $expiresAt = now()->addDays($days);
         }
 
-        // Activate the user's subscription
-        $user->update([
-            'subscription_status'    => 'active',
-            'subscription_type'      => 'pin',
-            'subscription_expires_at'=> $expiresAt,
-            'subscription_device_id' => null,
+        // Activate the user's subscription by creating a new subscription record
+        $subscription = \App\Models\Subscription::create([
+            'user_id'              => $user->id,
+            'subscription_plan_id' => 1, // Default or find appropriate plan ID
+            'status'               => 'active',
+            'type'                 => 'pin',
+            'starts_at'            => now(),
+            'expires_at'           => $expiresAt,
+            'amount_paid'          => 0, // PIN-based is usually prepaid/free at this point
+            'original_amount'      => 0,
+            'discount_amount'      => 0,
+            'notes'                => "Activated via PIN: {$subscriptionPin->pin}",
         ]);
 
         // Mark PIN as consumed
@@ -70,9 +76,10 @@ class SubscriptionPinController extends Controller
             'success' => true,
             'message' => 'Subscription activated successfully!',
             'data'    => [
-                'subscription_status'    => 'active',
-                'subscription_type'      => 'pin',
-                'subscription_expires_at'=> $expiresAt->toIso8601String(),
+                'subscription_id'        => $subscription->id,
+                'status'                 => 'active',
+                'type'                   => 'pin',
+                'expires_at'             => $expiresAt->toIso8601String(),
             ],
         ]);
     }

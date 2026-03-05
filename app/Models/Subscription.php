@@ -22,6 +22,8 @@ class Subscription extends Model
         'expires_at',
         'cancelled_at',
         'notes',
+        'type',
+        'device_id',
     ];
 
     protected $casts = [

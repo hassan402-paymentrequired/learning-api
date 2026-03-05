@@ -17,7 +17,10 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        $query = User::withCount('examAttempts');
+        $query = User::withCount('examAttempts')
+            ->withExists(['subscriptions as has_active_subscription' => function ($q) {
+                $q->where('status', 'active')->where('expires_at', '>', now());
+            }]);
 
         // Search
         if ($request->has('search')) {
@@ -29,7 +32,15 @@ class UserController extends Controller
 
         // Filter by subscription status
         if ($request->filled('subscription_status')) {
-            $query->where('subscription_status', $request->subscription_status);
+            if ($request->subscription_status === 'active') {
+                $query->whereHas('subscriptions', function ($q) {
+                    $q->where('status', 'active')->where('expires_at', '>', now());
+                });
+            } else {
+                $query->whereDoesntHave('subscriptions', function ($q) {
+                    $q->where('status', 'active')->where('expires_at', '>', now());
+                });
+            }
         }
 
         // Filter by registration date
@@ -42,6 +53,23 @@ class UserController extends Controller
         }
 
         $users = $query->orderBy('created_at', 'desc')->paginate(15);
+
+        $users->getCollection()->transform(function ($user) {
+            $user->subscription_status = $user->has_active_subscription ? 'active' : 'inactive';
+            // We could fetch the exact type, but for the list view, "Active" or "No Sub" is usually enough.
+            // However, to keep the PIN/Manual colors, let's try to get the type if active.
+            if ($user->has_active_subscription) {
+                 $activeSub = $user->subscriptions()
+                    ->where('status', 'active')
+                    ->where('expires_at', '>', now())
+                    ->latest('expires_at')
+                    ->first();
+                 $user->subscription_type = $activeSub?->type;
+            } else {
+                 $user->subscription_type = null;
+            }
+            return $user;
+        });
 
         return Inertia::render('admin/users/index', [
             'users'   => $users,
@@ -116,11 +144,12 @@ class UserController extends Controller
                 'created_at'   => $pin->created_at,
             ]);
 
+        $activeSub = $user->activeSubscription();
         return Inertia::render('admin/users/show', [
             'user'               => array_merge($user->toArray(), [
-                'subscription_status'    => $user->subscription_status,
-                'subscription_type'      => $user->subscription_type,
-                'subscription_expires_at'=> $user->subscription_expires_at,
+                'subscription_status'    => $activeSub ? 'active' : 'inactive',
+                'subscription_type'      => $activeSub?->type ?? 'paystack',
+                'subscription_expires_at'=> $activeSub?->expires_at,
             ]),
             'stats'              => $stats,
             'practiceHistory'    => $practiceHistory,
@@ -223,14 +252,18 @@ class UserController extends Controller
      */
     public function toggleSubscription(Request $request, User $user)
     {
-        if ($user->subscription_status === 'active' && $user->subscription_expires_at?->isFuture()) {
-            // Cancel subscription
-            $user->update([
-                'subscription_status' => 'cancelled',
-            ]);
-            $message = "{$user->name}'s subscription has been cancelled.";
+        if ($user->hasActiveSubscription()) {
+            // Cancel ALL active subscriptions for this user
+            $user->subscriptions()
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
+                ->update([
+                    'status' => 'cancelled',
+                    'cancelled_at' => now(),
+                ]);
+            $message = "{$user->name}'s active subscriptions have been cancelled.";
         } else {
-            // Activate subscription
+            // Activate NEW subscription
             $days     = (int) SubscriptionSetting::get('default_subscription_days', 365);
             $globalExpiry = SubscriptionSetting::get('global_expiry_date');
 
@@ -240,13 +273,18 @@ class UserController extends Controller
                 $expiresAt = now()->addDays($days);
             }
 
-            $user->update([
-                'subscription_status'    => 'active',
-                'subscription_type'      => 'manual',
-                'subscription_expires_at'=> $expiresAt,
-                'subscription_device_id' => null,
+            $user->subscriptions()->create([
+                'subscription_plan_id' => 1, // Default plan
+                'status'               => 'active',
+                'type'                 => 'manual',
+                'starts_at'            => now(),
+                'expires_at'           => $expiresAt,
+                'amount_paid'          => 0,
+                'original_amount'      => 0,
+                'discount_amount'      => 0,
+                'notes'                => 'Manually activated by admin',
             ]);
-            $message = "{$user->name}'s subscription activated until {$expiresAt->toDateString()}.";
+            $message = "{$user->name}'s manual subscription activated until {$expiresAt->toDateString()}.";
         }
 
         return redirect()->route('admin.users.show', $user)
@@ -262,11 +300,28 @@ class UserController extends Controller
             'expires_at' => 'required|date|after:today',
         ]);
 
-        $user->update([
-            'subscription_status'    => 'active',
-            'subscription_expires_at'=> \Carbon\Carbon::parse($request->expires_at)->endOfDay(),
-            'subscription_device_id' => null,
-        ]);
+        $user->subscriptions()
+            ->where('status', 'active')
+            ->where('expires_at', '>', now())
+            ->latest('expires_at')
+            ->first()
+            ?->update([
+                'expires_at' => \Carbon\Carbon::parse($request->expires_at)->endOfDay(),
+            ]);
+
+        // If no active, create one
+        if (!$user->hasActiveSubscription()) {
+            $user->subscriptions()->create([
+                'subscription_plan_id' => 1,
+                'status'               => 'active',
+                'type'                 => 'manual',
+                'starts_at'            => now(),
+                'expires_at'           => \Carbon\Carbon::parse($request->expires_at)->endOfDay(),
+                'amount_paid'          => 0,
+                'original_amount'      => 0,
+                'discount_amount'      => 0,
+            ]);
+        }
 
         return redirect()->route('admin.users.show', $user)
             ->with('success', "Subscription expiry updated to {$request->expires_at}.");

@@ -23,13 +23,9 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
-        'subscription_status',
-        'subscription_type',
         'referral_code',
         'referred_by',
         'paystack_customer_code',
-        'subscription_expires_at',
-        'subscription_device_id',
         'is_admin',
     ];
 
@@ -44,7 +40,6 @@ class User extends Authenticatable implements JWTSubject
         'two_factor_recovery_codes',
         'remember_token',
         'paystack_customer_code',
-        'subscription_expires_at',
         'referral_code'
     ];
 
@@ -96,16 +91,6 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(SubscriptionPin::class);
     }
 
-    /**
-     * Get the active subscription for the user.
-     */
-    public function activeSubscription()
-    {
-        return $this->hasOne(Subscription::class)
-            ->where('status', 'active')
-            ->where('expires_at', '>', now())
-            ->latest();
-    }
 
     /**
      * Get users referred by this user.
@@ -144,9 +129,11 @@ class User extends Authenticatable implements JWTSubject
      */
     public function hasActiveSubscription(): bool
     {
-        return $this->subscription_status === 'active'
-            && $this->subscription_expires_at
-            && $this->subscription_expires_at->isFuture();
+        return $this->subscriptions()
+            ->where('status', 'active')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '>', now())
+            ->exists();
     }
 
     /**
@@ -156,13 +143,46 @@ class User extends Authenticatable implements JWTSubject
      */
     public function hasActiveSubscriptionForDevice(?string $deviceId): bool
     {
-        if (!$this->hasActiveSubscription()) {
-            return false;
+        if (empty($deviceId)) {
+            // If they don't provide a device ID, check if they have ANY active subscription 
+            // that is unbound (device_id is null)
+            return $this->subscriptions()
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
+                ->whereNull('device_id')
+                ->exists();
         }
-        if (empty($this->subscription_device_id)) {
-            return true;
+
+        // They provided a device ID. Check if they have an active sub bound to this ID
+        // OR an active sub that is completely unbound (we can bind it later in the controller cache).
+        return $this->subscriptions()
+            ->where('status', 'active')
+            ->where('expires_at', '>', now())
+            ->where(function ($query) use ($deviceId) {
+                $query->where('device_id', $deviceId)
+                      ->orWhereNull('device_id');
+            })
+            ->exists();
+    }
+
+    /**
+     * Get the currently active subscription for a specific device.
+     */
+    public function activeSubscription(?string $deviceId = null)
+    {
+        $query = $this->subscriptions()
+            ->where('status', 'active')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '>', now());
+
+        if (!empty($deviceId)) {
+            $query->where(function ($q) use ($deviceId) {
+                $q->where('device_id', $deviceId)
+                  ->orWhereNull('device_id');
+            });
         }
-        return $deviceId !== null && $deviceId !== '' && $this->subscription_device_id === $deviceId;
+
+        return $query->latest('expires_at')->first();
     }
 
     /**
