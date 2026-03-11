@@ -62,7 +62,16 @@ class ExamAttemptController extends Controller
         ];
 
         if ($subjects !== null) {
-            $attemptData['subjects'] = $subjects;
+            // Process subjects to include question_ids if provided
+            $processedSubjects = array_map(function($subject) {
+                if (isset($subject['questions']) && is_array($subject['questions'])) {
+                    $subject['question_ids'] = array_column($subject['questions'], 'id');
+                    unset($subject['questions']); // Remove full objects to save space
+                }
+                return $subject;
+            }, $subjects);
+            $attemptData['subjects_data'] = $processedSubjects;
+            $attemptData['subjects'] = $processedSubjects;
         }
         if ($durationMinutes !== null) {
             $attemptData['duration_minutes'] = $durationMinutes;
@@ -128,11 +137,30 @@ class ExamAttemptController extends Controller
             ->first();
 
         if ($existingAttempt) {
+            // Update existing attempt with new question selection to ensure results are accurate
+            $updateData = [
+                'total_questions' => $totalQuestions,
+                'duration_minutes' => $durationMinutes,
+            ];
+
+            if ($subjects) {
+                $processedSubjects = array_map(function($subject) {
+                    if (isset($subject['questions']) && is_array($subject['questions'])) {
+                        $subject['question_ids'] = array_column($subject['questions'], 'id');
+                        unset($subject['questions']);
+                    }
+                    return $subject;
+                }, $subjects);
+                $updateData['subjects_data'] = $processedSubjects;
+            }
+
+            $existingAttempt->update($updateData);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Resuming existing practice session',
+                'message' => 'Resuming and refreshing existing practice session',
                 'data' => [
-                    'attempt' => $existingAttempt->load('exam'),
+                    'attempt' => $existingAttempt->fresh()->load('exam'),
                 ],
             ]);
         }
@@ -149,7 +177,15 @@ class ExamAttemptController extends Controller
 
         // Add subjects data if provided (for multi-subject tracking)
         if ($subjects) {
-            $attemptData['subjects_data'] = $subjects;
+            // Process subjects to include question_ids if provided
+            $processedSubjects = array_map(function($subject) {
+                if (isset($subject['questions']) && is_array($subject['questions'])) {
+                    $subject['question_ids'] = array_column($subject['questions'], 'id');
+                    unset($subject['questions']); // Remove full objects to save space
+                }
+                return $subject;
+            }, $subjects);
+            $attemptData['subjects_data'] = $processedSubjects;
         }
 
         $attempt = ExamAttempt::create($attemptData);
@@ -425,18 +461,16 @@ class ExamAttemptController extends Controller
         $durationMinutes = $request->input('duration_minutes', $attempt->duration_minutes);
 
         // Calculate score based on exam type
-        // For JAMB (UTME), scale to 400 marks
         $exam = $attempt->exam;
         $totalQuestions = $attempt->total_questions;
         
         if ($exam && $exam->exam_type === 'JAMB' && $totalQuestions > 0) {
-            // JAMB scoring: (correct_answers / total_questions) * 400
             $score = round(($correctAnswers / $totalQuestions) * 400);
         } else {
-            // For other exams, use raw score
             $score = $correctAnswers;
         }
 
+        // Merge subjects and duration cautiously - do not overwrite rich subjects_data if it exists
         $updateData = [
             'completed_at' => now(),
             'time_spent' => $totalTimeSpent,
@@ -445,10 +479,41 @@ class ExamAttemptController extends Controller
             'status' => 'completed',
         ];
 
-        // Only update subjects and duration if provided
+        // Merge subjects and duration cautiously - do not overwrite rich metadata
         if ($subjects !== null) {
-            $updateData['subjects'] = $subjects;
+            // Robust check for richness: does the CURRENT data have question_ids?
+            $currentData = $attempt->subjects_data ?? $attempt->subjects;
+            $currentIsRich = false;
+            if (is_array($currentData) && count($currentData) > 0) {
+                foreach ($currentData as $s) {
+                    if (isset($s['question_ids']) && !empty($s['question_ids'])) {
+                        $currentIsRich = true;
+                        break;
+                    }
+                }
+            }
+
+            // Robust check for incoming data richness
+            $incomingIsRich = false;
+            if (is_array($subjects) && count($subjects) > 0) {
+                foreach ($subjects as $s) {
+                    if (is_array($s) && isset($s['question_ids']) && !empty($s['question_ids'])) {
+                        $incomingIsRich = true;
+                        break;
+                    }
+                }
+            }
+
+            // Only update if incoming is rich OR if current is NOT rich
+            if ($incomingIsRich || !$currentIsRich) {
+                $updateData['subjects'] = $subjects;
+                // If subjects is rich, also sync to subjects_data
+                if ($incomingIsRich) {
+                    $updateData['subjects_data'] = $subjects;
+                }
+            }
         }
+        
         if ($durationMinutes !== null) {
             $updateData['duration_minutes'] = $durationMinutes;
         }
@@ -561,11 +626,38 @@ class ExamAttemptController extends Controller
         // Load exam relationship for percentage calculation
         $attempt->load('exam');
 
-        $results = $attempt->userAnswers()
-            ->with(['question.answers', 'answer', 'question.exam', 'question.subject'])
+        // Identify all questions that SHOULD have been answered
+        $assignedQuestionIds = [];
+        $subjectsData = $attempt->subjects_data;
+        
+        // Fallback to subjects column if subjects_data is empty
+        if (empty($subjectsData)) {
+            $subjectsData = $attempt->subjects;
+        }
+        
+        $hasRichMetadata = false;
+        if ($subjectsData && is_array($subjectsData)) {
+            foreach ($subjectsData as $subject) {
+                if (isset($subject['question_ids']) && is_array($subject['question_ids']) && !empty($subject['question_ids'])) {
+                    $assignedQuestionIds = array_merge($assignedQuestionIds, $subject['question_ids']);
+                    $hasRichMetadata = true;
+                }
+            }
+        }
+
+        // ONLY fallback to all exam questions if we have ZERO assigned question IDs and an exam_id exists
+        if (!$hasRichMetadata && empty($assignedQuestionIds) && $attempt->exam_id) {
+            $assignedQuestionIds = $attempt->exam->questions()->pluck('id')->toArray();
+        }
+
+        // Fetch all assigned questions with their correct answers and user's answer
+        $userAnswers = $attempt->userAnswers()->get()->keyBy('question_id');
+        
+        $results = Question::whereIn('id', $assignedQuestionIds)
+            ->with(['answers', 'subject', 'exam'])
             ->get()
-            ->map(function ($userAnswer) {
-                $question = $userAnswer->question;
+            ->map(function ($question) use ($userAnswers) {
+                $userAnswer = $userAnswers->get($question->id);
                 $correctAnswer = $question->correctAnswer();
 
                 // For text_input and numeric_input, get expected_answer as correct answer
@@ -588,7 +680,7 @@ class ExamAttemptController extends Controller
 
                 // User answer data
                 $userAnswerData = null;
-                if ($userAnswer->answer) {
+                if ($userAnswer && $userAnswer->answer) {
                     $userAnswerData = [
                         'id' => $userAnswer->answer->id,
                         'answer_text' => $userAnswer->answer->answer_text,
@@ -598,7 +690,7 @@ class ExamAttemptController extends Controller
 
                 // Include all answer options for multiple_choice and true_false (for corrections view)
                 $questionAnswers = null;
-                if (in_array($question->question_type, ['multiple_choice', 'true_false']) && $question->relationLoaded('answers')) {
+                if (in_array($question->question_type, ['multiple_choice', 'true_false'])) {
                     $questionAnswers = $question->answers->map(fn ($a) => [
                         'id' => $a->id,
                         'answer_text' => $a->answer_text,
@@ -620,23 +712,24 @@ class ExamAttemptController extends Controller
                     ],
                     'user_answer' => $userAnswerData,
                     'correct_answer' => $correctAnswerData,
-                    'is_correct' => $userAnswer->is_correct,
-                    'time_spent' => $userAnswer->time_spent,
+                    'is_correct' => $userAnswer ? $userAnswer->is_correct : false,
+                    'time_spent' => $userAnswer ? $userAnswer->time_spent : 0,
                 ];
-            });
+            })
+            ->values();
 
         // Calculate subject-based analytics if multiple subjects
         $subjectAnalytics = [];
         if ($attempt->subjects && is_array($attempt->subjects) && count($attempt->subjects) > 0) {
-            // Group results by subject based on exam subject
+            // Group results by subject based on question metadata
             $resultsBySubject = [];
             foreach ($results as $result) {
-                $examSubject = trim($result['question']['subject'] ?? '');
-                if ($examSubject) {
-                    if (!isset($resultsBySubject[$examSubject])) {
-                        $resultsBySubject[$examSubject] = [];
+                $qSubject = trim($result['question']['subject'] ?? '');
+                if ($qSubject) {
+                    if (!isset($resultsBySubject[$qSubject])) {
+                        $resultsBySubject[$qSubject] = [];
                     }
-                    $resultsBySubject[$examSubject][] = $result;
+                    $resultsBySubject[$qSubject][] = $result;
                 }
             }
 
