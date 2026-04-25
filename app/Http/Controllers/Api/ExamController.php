@@ -211,7 +211,14 @@ class ExamController extends Controller
                     if ($examType) {
                         $query->whereJsonContains('exam_types', $examType)
                             ->orWhereHas('questions', function ($q) use ($examType) {
-                                $q->whereJsonContains('exam_types', $examType);
+                                $q->whereJsonContains('exam_types', $examType)
+                                  ->orWhereHas('examCategories', function ($cq) use ($examType) {
+                                      if (is_numeric($examType)) {
+                                          $cq->where('exam_categories.id', (int) $examType);
+                                      } else {
+                                          $cq->where('exam_categories.slug', $examType);
+                                      }
+                                  });
                             });
                     }
                 })
@@ -430,14 +437,24 @@ class ExamController extends Controller
     public function getAvailableYears(Request $request)
     {
         $request->validate([
-            'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'exam_type' => 'required|string',
             'subjects' => 'required|array|min:1',
             'subjects.*' => 'required|string',
         ]);
 
+        $examType = $request->input('exam_type');
+
+        // If numeric ID provided, resolve to slug for the exams table
+        if (is_numeric($examType)) {
+            $category = \App\Models\ExamCategory::find($examType);
+            if ($category) {
+                $examType = $category->slug;
+            }
+        }
+
         // Exams are now only for past questions, so no need to filter by type
         $query = Exam::where('is_active', true)
-            ->where('exam_type', $request->input('exam_type'))
+            ->where('exam_type', $examType)
             ->whereNotNull('year');
 
         // Filter by subjects if provided (array of subject names)

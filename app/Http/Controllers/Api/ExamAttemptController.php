@@ -98,7 +98,9 @@ class ExamAttemptController extends Controller
             'exam_type' => 'required',
             'subjects' => 'required|array|min:1',
             'subjects.*.subject' => 'required|string',
+            'subjects.*.year' => 'nullable|integer',
             'subjects.*.question_count' => 'required|integer|min:1|max:100',
+            'subjects.*.question_ids' => 'nullable|array',
             'subjects.*.subject_test_id' => 'nullable|integer',
             'duration_minutes' => 'required|integer|min:1|max:300',
         ]);
@@ -126,6 +128,8 @@ class ExamAttemptController extends Controller
             $subjectName = $sInput['subject'];
             $requestedCount = $sInput['question_count'];
             $subjectTestId = $sInput['subject_test_id'] ?? null;
+            $year = $sInput['year'] ?? null;
+            $inputQuestionIds = $sInput['question_ids'] ?? null;
             
             // Limit questions for non-subscribed users
             $count = $hasActiveSubscription ? $requestedCount : min($requestedCount, 5);
@@ -148,6 +152,12 @@ class ExamAttemptController extends Controller
             if ($subjectTestId) {
                 $query->whereHas('subjectTests', function ($q) use ($subjectTestId) {
                     $q->where('subject_tests.id', $subjectTestId);
+                });
+            }
+
+            if ($year) {
+                $query->whereHas('exam', function ($q) use ($year) {
+                    $q->where('year', $year);
                 });
             }
 
@@ -480,7 +490,24 @@ class ExamAttemptController extends Controller
         $exam = $attempt->exam;
         $totalQuestions = $attempt->total_questions;
         
-        if ($exam && $exam->exam_type === 'JAMB' && $totalQuestions > 0) {
+        // Determine if this is a JAMB exam
+        $isJamb = false;
+        if ($exam && $exam->exam_type === 'JAMB') {
+            $isJamb = true;
+        } else {
+            // For practice sessions, check the exam_type from request or metadata
+            $providedExamType = $request->input('exam_type');
+            if ($providedExamType) {
+                $category = \App\Models\ExamCategory::where('id', $providedExamType)
+                    ->orWhere('slug', $providedExamType)
+                    ->first();
+                if ($category && $category->slug === 'JAMB') {
+                    $isJamb = true;
+                }
+            }
+        }
+
+        if ($isJamb && $totalQuestions > 0) {
             $score = round(($correctAnswers / $totalQuestions) * 400);
         } else {
             $score = $correctAnswers;
