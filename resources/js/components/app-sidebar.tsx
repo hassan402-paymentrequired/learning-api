@@ -44,14 +44,19 @@ const mainNavItems: NavItem[] = [
         icon: Database,
     },
     {
-        title: 'Subjects',
-        href: admin.subjects.index().url,
-        icon: GraduationCap,
+        title: 'Exam Categories',
+        href: '/admin/exam-categories',
+        icon: BookOpen,
     },
     {
         title: 'Departments',
         href: '/admin/departments',
         icon: Building2,
+    },
+    {
+        title: 'Subjects',
+        href: admin.subjects.index().url,
+        icon: GraduationCap,
     },
     {
         title: 'Settings',

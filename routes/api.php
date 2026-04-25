@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ExamCategoryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -56,6 +57,7 @@ Route::middleware('auth:api')->group(function () {
 // Protected routes requiring email verification
 Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class])->group(function () {
     // Exam routes
+    Route::get('/exam-categories', [ExamCategoryController::class, 'index']);
     Route::get('/exams', [ExamController::class, 'index']);
     Route::get('/exams/subjects', [ExamController::class, 'subjects']);
     Route::get('/exams/years', [ExamController::class, 'getAvailableYears']);

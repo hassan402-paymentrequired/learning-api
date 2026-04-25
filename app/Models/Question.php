@@ -63,6 +63,15 @@ class Question extends Model
     }
 
     /**
+     * Get the dynamic exam categories this question belongs to (many-to-many).
+     */
+    public function examCategories(): BelongsToMany
+    {
+        return $this->belongsToMany(ExamCategory::class, 'exam_category_question')
+            ->withTimestamps();
+    }
+
+    /**
      * Get the correct answer for the question.
      * For text_input and numeric_input, returns an answer record with expected_answer if it exists.
      */

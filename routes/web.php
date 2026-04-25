@@ -93,6 +93,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{department}', [App\Http\Controllers\Admin\DepartmentController::class, 'destroy'])->name('destroy');
         });
 
+        // Exam Categories routes
+        Route::prefix('exam-categories')->name('exam-categories.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\ExamCategoryController::class, 'index'])->name('index');
+            Route::get('/create', [App\Http\Controllers\Admin\ExamCategoryController::class, 'create'])->name('create');
+            Route::post('/', [App\Http\Controllers\Admin\ExamCategoryController::class, 'store'])->name('store');
+            Route::get('/{examCategory}/edit', [App\Http\Controllers\Admin\ExamCategoryController::class, 'edit'])->name('edit');
+            Route::patch('/{examCategory}', [App\Http\Controllers\Admin\ExamCategoryController::class, 'update'])->name('update');
+            Route::post('/{examCategory}/toggle-active', [App\Http\Controllers\Admin\ExamCategoryController::class, 'toggleActive'])->name('toggle-active');
+            Route::delete('/{examCategory}', [App\Http\Controllers\Admin\ExamCategoryController::class, 'destroy'])->name('destroy');
+        });
+
         // Subjects routes
         Route::prefix('subjects')->name('subjects.')->group(function () {
             Route::get('/', [App\Http\Controllers\Admin\SubjectController::class, 'index'])->name('index');
