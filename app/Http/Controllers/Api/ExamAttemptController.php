@@ -88,113 +88,129 @@ class ExamAttemptController extends Controller
         ], 201);
     }
 
-    /**
-     * Start a new practice session.
-     * This creates an exam attempt for practice questions without requiring a specific exam.
-     */
     public function startPracticeSession(Request $request)
     {
+        $user = auth()->user();
+        $deviceId = $request->header('X-Device-Id');
+        $hasActiveSubscription = $user->hasActiveSubscriptionForDevice($deviceId);
+        
         $request->validate([
-            'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'exam_type' => 'required',
             'subjects' => 'required|array|min:1',
             'subjects.*.subject' => 'required|string',
             'subjects.*.question_count' => 'required|integer|min:1|max:100',
+            'subjects.*.subject_test_id' => 'nullable|integer',
             'duration_minutes' => 'required|integer|min:1|max:300',
         ]);
 
         $examType = $request->input('exam_type');
-        $subjects = $request->input('subjects');
+        $subjectsInput = $request->input('subjects');
         $durationMinutes = $request->input('duration_minutes');
         
-        // Calculate total questions
-        $totalQuestions = collect($subjects)->sum('question_count');
-        
-        // Try to find an existing exam for this exam type, or create a virtual one
-        $exam = Exam::where('exam_type', $examType)->where('is_active', true)->first();
-        
-        if (!$exam) {
-            // Create a virtual/temporary exam record for practice sessions
-            $exam = Exam::firstOrCreate(
-                [
-                    'title' => "{$examType} Practice Session",
-                    'exam_type' => $examType,
-                    'subject' => null, // Multi-subject practice
-                    'year' => null,
-                ],
-                [
-                    'description' => "Practice session for {$examType} questions",
-                    'total_questions' => $totalQuestions,
-                    'is_active' => true,
-                ]
-            );
-        }
-
-        // Check if user has an in-progress practice attempt
-        $existingAttempt = ExamAttempt::where('user_id', auth()->id())
-            ->where('exam_id', $exam->id)
-            ->where('status', 'in_progress')
-            ->where('created_at', '>', now()->subHours(6)) // Only check recent attempts
+        // Find the exam category to get consistent slug/name for the practice record
+        $examCategory = \App\Models\ExamCategory::where('id', $examType)
+            ->orWhere('slug', $examType)
             ->first();
+        
+        $categorySlug = $examCategory ? $examCategory->slug : $examType;
+        $categoryName = $examCategory ? $examCategory->name : $examType;
 
-        if ($existingAttempt) {
-            // Update existing attempt with new question selection to ensure results are accurate
-            $updateData = [
-                'total_questions' => $totalQuestions,
-                'duration_minutes' => $durationMinutes,
-            ];
+        // No exam record for practice sessions; they exist independently of admin-uploaded exams.
+        $examId = null;
 
-            if ($subjects) {
-                $processedSubjects = array_map(function($subject) {
-                    if (isset($subject['questions']) && is_array($subject['questions'])) {
-                        $subject['question_ids'] = array_column($subject['questions'], 'id');
-                        unset($subject['questions']);
-                    }
-                    return $subject;
-                }, $subjects);
-                $updateData['subjects_data'] = $processedSubjects;
+        $allQuestionsData = [];
+        $processedSubjects = [];
+        $totalQuestions = 0;
+
+        foreach ($subjectsInput as $sInput) {
+            $subjectName = $sInput['subject'];
+            $requestedCount = $sInput['question_count'];
+            $subjectTestId = $sInput['subject_test_id'] ?? null;
+            
+            // Limit questions for non-subscribed users
+            $count = $hasActiveSubscription ? $requestedCount : min($requestedCount, 5);
+            
+            $subjectModel = Subject::where('name', $subjectName)->first();
+            if (!$subjectModel) continue;
+
+            $query = Question::where('subject_id', $subjectModel->id)
+                ->where(function ($q) use ($examType) {
+                    $q->whereJsonContains('exam_types', $examType)
+                      ->orWhereHas('examCategories', function ($cq) use ($examType) {
+                          if (is_numeric($examType)) {
+                              $cq->where('exam_categories.id', (int) $examType);
+                          } else {
+                              $cq->where('exam_categories.slug', $examType);
+                          }
+                      });
+                });
+
+            if ($subjectTestId) {
+                $query->whereHas('subjectTests', function ($q) use ($subjectTestId) {
+                    $q->where('subject_tests.id', $subjectTestId);
+                });
             }
 
-            $existingAttempt->update($updateData);
+            $questions = $query->inRandomOrder()
+                ->with(['answers' => function($aq) { $aq->orderBy('order'); }])
+                ->limit($count)
+                ->get();
+            
+            if ($questions->isEmpty()) continue;
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Resuming and refreshing existing practice session',
-                'data' => [
-                    'attempt' => $existingAttempt->fresh()->load('exam'),
-                ],
-            ]);
+            // Format questions for frontend
+            $formattedQuestions = $questions->map(function($q) {
+                return [
+                    'id' => $q->id,
+                    'question_text' => $q->question_text,
+                    'question_type' => $q->question_type,
+                    'image' => $q->image,
+                    'explanation' => $q->explanation,
+                    'answers' => $q->answers->map(fn($a) => [
+                        'id' => $a->id,
+                        'answer_text' => $a->answer_text,
+                        'order' => $a->order,
+                    ])
+                ];
+            });
+
+            $allQuestionsData[$subjectName] = $formattedQuestions;
+            
+            $processedSubjects[] = [
+                'subject' => $subjectName,
+                'question_count' => $questions->count(),
+                'question_ids' => $questions->pluck('id')->toArray(),
+            ];
+            
+            $totalQuestions += $questions->count();
         }
 
-        // Create new practice attempt
-        $attemptData = [
-            'user_id' => auth()->id(),
-            'exam_id' => $exam->id,
+        if ($totalQuestions === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No questions found for the selected subjects.',
+            ], 404);
+        }
+
+        // Create fresh attempt (users cannot continue any practice session)
+        $attempt = ExamAttempt::create([
+            'user_id' => $user->id,
+            'exam_id' => $examId,
             'status' => 'in_progress',
             'started_at' => now(),
             'duration_minutes' => $durationMinutes,
             'total_questions' => $totalQuestions,
-        ];
-
-        // Add subjects data if provided (for multi-subject tracking)
-        if ($subjects) {
-            // Process subjects to include question_ids if provided
-            $processedSubjects = array_map(function($subject) {
-                if (isset($subject['questions']) && is_array($subject['questions'])) {
-                    $subject['question_ids'] = array_column($subject['questions'], 'id');
-                    unset($subject['questions']); // Remove full objects to save space
-                }
-                return $subject;
-            }, $subjects);
-            $attemptData['subjects_data'] = $processedSubjects;
-        }
-
-        $attempt = ExamAttempt::create($attemptData);
+            'subjects' => $processedSubjects,
+            'subjects_data' => $processedSubjects,
+        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Practice session started successfully',
             'data' => [
                 'attempt' => $attempt->load('exam'),
+                'questions' => $allQuestionsData,
+                'has_active_subscription' => $hasActiveSubscription,
             ],
         ], 201);
     }
@@ -564,9 +580,9 @@ class ExamAttemptController extends Controller
             return [
                 'id' => $attempt->id,
                 'exam' => [
-                    'id' => $attempt->exam->id,
-                    'title' => $attempt->exam->title,
-                    'type' => $attempt->exam->type,
+                    'id' => $attempt->exam_id,
+                    'title' => $attempt->exam ? $attempt->exam->title : "Practice Session",
+                    'type' => $attempt->exam ? $attempt->exam->exam_type : "Practice",
                 ],
                 'status' => $attempt->status,
                 'score' => $attempt->score,
@@ -819,7 +835,7 @@ class ExamAttemptController extends Controller
             ->map(function ($attempt) {
                 return [
                     'id' => $attempt->id,
-                    'exam_title' => $attempt->exam->title,
+                    'exam_title' => $attempt->exam ? $attempt->exam->title : "Practice Session",
                     'score' => $attempt->score,
                     'percentage' => $attempt->percentage,
                     'completed_at' => $attempt->completed_at,

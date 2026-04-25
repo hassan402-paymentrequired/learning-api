@@ -50,9 +50,13 @@ class QuestionController extends Controller
         // Get all subjects for filter
         $subjects = Subject::select('id', 'name')->where('is_active', true)->orderBy('name')->get();
 
+        // Get all exam categories for filter
+        $examCategories = \App\Models\ExamCategory::where('is_active', true)->orderBy('name')->get(['id', 'name', 'slug']);
+
         return Inertia::render('admin/questions/index', [
             'questions' => $questions,
             'subjects' => $subjects,
+            'examCategories' => $examCategories,
             'filters' => $request->only(['search', 'subject_id', 'exam_type', 'question_type']),
         ]);
     }
@@ -72,10 +76,15 @@ class QuestionController extends Controller
             ->orderBy('order')
             ->get(['id', 'subject_id', 'name', 'order']);
 
+        $examCategories = \App\Models\ExamCategory::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'flow_type']);
+
         return Inertia::render('admin/questions/create', [
             'subjects' => $subjects,
             'departments' => $departments,
             'subjectTests' => $subjectTests,
+            'examCategories' => $examCategories,
         ]);
     }
 
@@ -101,7 +110,7 @@ class QuestionController extends Controller
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
-            'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'exam_types.*' => 'required',
         ];
 
         // When DLI is selected, allow optional test_ids (subject tests for this subject)
@@ -252,6 +261,10 @@ class QuestionController extends Controller
             ->orderBy('order')
             ->get(['id', 'subject_id', 'name', 'order']);
 
+        $examCategories = \App\Models\ExamCategory::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
         // Ensure exam_types is an array
         if (!$question->exam_types || !is_array($question->exam_types)) {
             $question->exam_types = [];
@@ -262,6 +275,7 @@ class QuestionController extends Controller
             'subjects' => $subjects,
             'departments' => $departments,
             'subjectTests' => $subjectTests,
+            'examCategories' => $examCategories,
         ]);
     }
 
@@ -284,7 +298,7 @@ class QuestionController extends Controller
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
         'exam_types' => 'required|array|min:1',
-        'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+        'exam_types.*' => 'required',
     ];
 
         // When DLI is selected, allow optional test_ids
@@ -468,7 +482,7 @@ class QuestionController extends Controller
                     'Expected Answer',
                     'Alternative Answers (comma-separated, optional)',
                     'Explanation (Optional)',
-                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                    'Exam Types (comma-separated slugs)'
                 ]);
 
                 // Sample rows
@@ -487,7 +501,7 @@ class QuestionController extends Controller
                     'Question Text',
                     'Expected Answer (true/false)',
                     'Explanation (Optional)',
-                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                    'Exam Types (comma-separated slugs)'
                 ]);
 
                 // Sample rows
@@ -510,7 +524,7 @@ class QuestionController extends Controller
                     'Answer E (Optional)',
                     'Correct Answer (A/B/C/D/E)',
                     'Explanation (Optional)',
-                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                    'Exam Types (comma-separated slugs)'
                 ]);
 
                 // Sample rows
@@ -604,13 +618,14 @@ class QuestionController extends Controller
             $examTypes = [];
             if (!empty($examTypesString)) {
                 $examTypes = array_map('trim', explode(',', $examTypesString));
-                $examTypes = array_filter($examTypes, function ($type) {
-                    return in_array(strtoupper($type), ['JAMB', 'DLI', 'UNILAG', 'GENERAL']);
+                $validSlugs = \App\Models\ExamCategory::pluck('slug')->toArray();
+                $examTypes = array_filter($examTypes, function ($type) use ($validSlugs) {
+                    return in_array(strtoupper($type), array_map('strtoupper', $validSlugs));
                 });
                 $examTypes = array_map('strtoupper', $examTypes);
             }
             if (empty($examTypes)) {
-                $errors[] = "Row {$rowNumber}: At least one exam type (JAMB, DLI, UNILAG, GENERAL) is required.";
+                $errors[] = "Row {$rowNumber}: At least one valid exam type is required.";
                 continue;
             }
 

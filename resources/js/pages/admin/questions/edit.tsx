@@ -54,11 +54,19 @@ interface SubjectTest {
     order: number;
 }
 
+interface ExamCategory {
+    id: number;
+    name: string;
+    slug: string;
+    flow_type: 'standard' | 'departmental';
+}
+
 interface Props {
     question: Question;
     subjects: Subject[];
     departments: Department[];
     subjectTests: SubjectTest[];
+    examCategories: ExamCategory[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -66,8 +74,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Edit Question', href: '#' },
 ];
 
-export default function EditQuestion({ question, subjects, departments, subjectTests }: Props) {
-    console.log('summitted')
+export default function EditQuestion({ question, subjects, departments, subjectTests, examCategories }: Props) {
     // Get department_id from question's subject if it exists
     const initialDepartmentId = question.subject?.department_id || null;
     
@@ -91,13 +98,18 @@ export default function EditQuestion({ question, subjects, departments, subjectT
         test_ids: ((question as any).subject_tests ?? (question as any).subjectTests ?? []).map((t: { id: number }) => t.id),
     });
 
-    // Filter subjects based on selected department when DLI/UNILAG is selected
-    const filteredSubjects = data.exam_types.some(type => type === 'DLI' || type === 'UNILAG') && data.department_id
+    // Determine if any selected exam type has a departmental flow
+    const selectedCategories = examCategories.filter(cat => data.exam_types.includes(cat.slug));
+    const hasDepartmentalFlow = selectedCategories.some(cat => cat.flow_type === 'departmental');
+    const hasDliType = data.exam_types.includes('DLI');
+
+    // Filter subjects based on selected department when a departmental flow is selected
+    const filteredSubjects = hasDepartmentalFlow && data.department_id
         ? subjects.filter(subject => subject.department_id === data.department_id)
         : subjects;
 
-    // Tests for the selected subject (only for DLI)
-    const testsForSubject = data.exam_types.includes('DLI') && data.subject_id
+    // Tests for the selected subject: show multi-select only when exam type is DLI
+    const testsForSubject = hasDliType && data.subject_id
         ? subjectTests.filter(t => t.subject_id === parseInt(data.subject_id, 10))
         : [];
 
@@ -162,34 +174,38 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                         <form onSubmit={submit} className="space-y-6">
                             <div className="space-y-2">
                                 <Label>Available for Exam Types *</Label>
-                                <div className="flex gap-4">
-                                    {['JAMB', 'DLI', 'UNILAG', 'GENERAL'].map((type) => (
-                                        <div key={type} className="flex items-center space-x-2">
+                                <div className="grid grid-cols-2 gap-4">
+                                    {examCategories.map((category) => (
+                                        <div key={category.id} className="flex items-center space-x-2">
                                             <Checkbox
-                                                id={`exam_type_${type}`}
-                                                checked={data.exam_types.includes(type)}
+                                                id={`exam_type_${category.slug}`}
+                                                checked={data.exam_types.includes(category.slug)}
                                                 onCheckedChange={(checked) => {
                                                     const newExamTypes = checked
-                                                        ? [...data.exam_types, type]
-                                                        : data.exam_types.filter((t) => t !== type);
-                                                    setData('exam_types', newExamTypes);
+                                                        ? [...data.exam_types, category.slug]
+                                                        : data.exam_types.filter((t) => t !== category.slug);
                                                     
-                                                    // Clear department and subject if DLI/UNILAG is unchecked
-                                                    if (!checked && (type === 'DLI' || type === 'UNILAG')) {
-                                                        const hasDliOrUnilag = newExamTypes.some(t => t === 'DLI' || t === 'UNILAG');
-                                                        if (!hasDliOrUnilag) {
-                                                            setData('department_id', null);
-                                                            setData('subject_id', '');
-                                                            setData('test_ids', []);
-                                                        }
+                                                    setData('exam_types', newExamTypes);
+
+                                                    // Determine if we still have departmental flows or DLI
+                                                    const currentCategories = examCategories.filter(cat => newExamTypes.includes(cat.slug));
+                                                    const stillHasDepartmental = currentCategories.some(cat => cat.flow_type === 'departmental');
+                                                    const stillHasDli = newExamTypes.includes('DLI');
+
+                                                    // Clear department, subject and test_ids if no departmental flows are left
+                                                    if (!checked && category.flow_type === 'departmental' && !stillHasDepartmental) {
+                                                        setData('department_id', null);
+                                                        setData('subject_id', '');
+                                                        setData('test_ids', []);
                                                     }
-                                                    if (!checked && type === 'DLI') {
+                                                    
+                                                    if (!checked && category.slug === 'DLI' && !stillHasDli) {
                                                         setData('test_ids', []);
                                                     }
                                                 }}
                                             />
-                                            <Label htmlFor={`exam_type_${type}`} className="font-normal cursor-pointer">
-                                                {type}
+                                            <Label htmlFor={`exam_type_${category.slug}`} className="font-normal cursor-pointer">
+                                                {category.name}
                                             </Label>
                                         </div>
                                     ))}
@@ -200,8 +216,8 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                                 <InputError message={errors.exam_types} />
                             </div>
 
-                            {/* Department Selection for DLI/UNILAG */}
-                            {(data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && (
+                            {/* Department Selection for Departmental Flows (DLI/UNILAG/etc) */}
+                            {hasDepartmentalFlow && (
                                 <div className="grid gap-2">
                                     <Label htmlFor="department_id">Department *</Label>
                                     <Select
@@ -228,7 +244,7 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Department is required for DLI/Unilag questions.
+                                        Department is required for departmental exam types.
                                     </p>
                                     <InputError message={(errors as any).department_id} />
                                 </div>
@@ -247,7 +263,7 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder={
-                                            (data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && !data.department_id
+                                            hasDepartmentalFlow && !data.department_id
                                                 ? "Select a department first"
                                                 : filteredSubjects.length === 0
                                                 ? "No subjects available"
@@ -262,7 +278,7 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {(data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && !data.department_id && (
+                                {hasDepartmentalFlow && !data.department_id && (
                                     <p className="text-xs text-muted-foreground">
                                         Please select a department first to see available subjects.
                                     </p>
@@ -271,7 +287,7 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                             </div>
 
                             {/* Tests multi-select: only when exam type is DLI and subject is selected */}
-                            {data.exam_types.includes('DLI') && data.subject_id && (
+                            {hasDliType && data.subject_id && (
                                 <div className="grid gap-2">
                                     <Label>Tests (optional)</Label>
                                     <p className="text-xs text-muted-foreground">

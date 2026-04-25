@@ -50,6 +50,12 @@ interface Subject {
     name: string;
 }
 
+interface ExamCategory {
+    id: number;
+    name: string;
+    slug: string;
+}
+
 interface Props {
     questions: {
         data: Question[];
@@ -59,6 +65,7 @@ interface Props {
         total: number;
     };
     subjects: Subject[];
+    examCategories: ExamCategory[];
     filters: {
         search?: string;
         subject_id?: string;
@@ -67,7 +74,7 @@ interface Props {
     };
 }
 
-export default function QuestionsIndex({ questions, subjects, filters }: Props) {
+export default function QuestionsIndex({ questions, subjects, examCategories, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [subjectId, setSubjectId] = useState(filters.subject_id || '');
     const [examType, setExamType] = useState(filters.exam_type || '');
@@ -310,10 +317,11 @@ export default function QuestionsIndex({ questions, subjects, filters }: Props) 
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Exam Types</SelectItem>
-                                        <SelectItem value="JAMB">JAMB</SelectItem>
-                                        <SelectItem value="DLI">DLI</SelectItem>
-                                        <SelectItem value="UNILAG">UNILAG</SelectItem>
-                                        <SelectItem value="GENERAL">GENERAL</SelectItem>
+                                        {examCategories.map((category) => (
+                                            <SelectItem key={category.id} value={category.slug}>
+                                                {category.name}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                                 <Select value={questionType || 'all'} onValueChange={setQuestionType}>

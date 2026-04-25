@@ -15,11 +15,19 @@ interface Department {
     name: string;
 }
 
-interface Props {
-    departments: Department[];
+interface ExamCategory {
+    id: number;
+    name: string;
+    slug: string;
+    flow_type: 'standard' | 'departmental';
 }
 
-export default function CreateSubject({ departments }: Props) {
+interface Props {
+    departments: Department[];
+    examCategories: ExamCategory[];
+}
+
+export default function CreateSubject({ departments, examCategories }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         description: '',
@@ -27,6 +35,11 @@ export default function CreateSubject({ departments }: Props) {
         department_id: null as number | null,
         is_active: true,
     });
+
+    // Determine if any selected exam type has a departmental flow
+    const hasDepartmentalFlow = examCategories
+        .filter(cat => data.exam_types.includes(cat.slug))
+        .some(cat => cat.flow_type === 'departmental');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -84,31 +97,33 @@ export default function CreateSubject({ departments }: Props) {
 
                             <div className="space-y-2">
                                 <Label>Available for Exam Types *</Label>
-                                <div className="flex gap-4">
-                                    {['JAMB', 'DLI', 'UNILAG', 'GENERAL'].map((type) => (
-                                        <div key={type} className="flex items-center space-x-2">
+                                <div className="grid grid-cols-2 gap-4">
+                                    {examCategories.map((category) => (
+                                        <div key={category.id} className="flex items-center space-x-2">
                                             <Checkbox
-                                                id={`exam_type_${type}`}
-                                                checked={data.exam_types.includes(type)}
+                                                id={`exam_type_${category.slug}`}
+                                                checked={data.exam_types.includes(category.slug)}
                                                 onCheckedChange={(checked) => {
-                                                    setData('exam_types', checked
-                                                        ? [...data.exam_types, type]
-                                                        : data.exam_types.filter((t) => t !== type)
-                                                    );
-                                                    // Clear department if DLI/UNILAG is unchecked
-                                                    if (!checked && (type === 'DLI' || type === 'UNILAG')) {
-                                                        const hasDliOrUnilag = (checked
-                                                            ? [...data.exam_types, type]
-                                                            : data.exam_types.filter((t) => t !== type)
-                                                        ).some(t => t === 'DLI' || t === 'UNILAG');
-                                                        if (!hasDliOrUnilag) {
+                                                    const newExamTypes = checked
+                                                        ? [...data.exam_types, category.slug]
+                                                        : data.exam_types.filter((t) => t !== category.slug);
+                                                    
+                                                    setData('exam_types', newExamTypes);
+
+                                                    // Clear department if no departmental flows are left
+                                                    if (!checked && category.flow_type === 'departmental') {
+                                                        const stillHasDepartmental = examCategories
+                                                            .filter(cat => newExamTypes.includes(cat.slug))
+                                                            .some(cat => cat.flow_type === 'departmental');
+                                                        
+                                                        if (!stillHasDepartmental) {
                                                             setData('department_id', null);
                                                         }
                                                     }
                                                 }}
                                             />
-                                            <Label htmlFor={`exam_type_${type}`} className="font-normal cursor-pointer">
-                                                {type}
+                                            <Label htmlFor={`exam_type_${category.slug}`} className="font-normal cursor-pointer">
+                                                {category.name}
                                             </Label>
                                         </div>
                                     ))}
@@ -121,7 +136,7 @@ export default function CreateSubject({ departments }: Props) {
                                 )}
                             </div>
 
-                            {(data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && (
+                            {hasDepartmentalFlow && (
                                 <div className="space-y-2">
                                     <Label htmlFor="department_id">Department *</Label>
                                     <Select

@@ -9,6 +9,7 @@ use App\Models\Exam;
 use App\Models\Question;
 use App\Models\Subject;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ExamController extends Controller
 {
@@ -255,7 +256,7 @@ class ExamController extends Controller
         $maxCount = $hasActiveSubscription ? 100 : 5;
         
         $request->validate([
-            'exam_type' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'exam_type' => 'required',
             'subject' => 'required|string',
             'count' => ['required', 'integer', 'min:1', "max:{$maxCount}"],
             'subject_test_id' => 'nullable|integer|exists:subject_tests,id',
@@ -284,7 +285,16 @@ class ExamController extends Controller
         // OPTIMIZATION: Use database-level filtering and bulk operations
         // Step 1: Get question IDs first (lightweight query)
         $query = Question::where('subject_id', $subjectModel->id)
-            ->whereJsonContains('exam_types', $examType);
+            ->where(function ($q) use ($examType) {
+                $q->whereJsonContains('exam_types', $examType)
+                  ->orWhereHas('examCategories', function ($cq) use ($examType) {
+                      if (is_numeric($examType)) {
+                          $cq->where('exam_categories.id', (int) $examType);
+                      } else {
+                          $cq->where('exam_categories.slug', $examType);
+                      }
+                  });
+            });
 
         // When subject_test_id provided (DLI), filter to questions belonging to that test
         if ($subjectTestId) {
@@ -467,6 +477,7 @@ class ExamController extends Controller
     public function departments(Request $request)
     {
         $departments = Department::where('is_active', true)
+            ->withCount('subjects')
             ->orderBy('name')
             ->get(['id', 'name', 'slug', 'description']);
 
@@ -481,9 +492,11 @@ class ExamController extends Controller
      */
     public function departmentSubjects(Request $request, $departmentId)
     {
-        $request->validate([
-            'exam_type' => 'required|in:DLI,UNILAG',
+       $v = $request->validate([
+            'exam_type' => 'required',
         ]);
+
+        Log::info('Department subjects request: ', $v);
 
         $department = Department::where('id', $departmentId)
             ->where('is_active', true)
@@ -494,12 +507,21 @@ class ExamController extends Controller
             ->where(function ($query) use ($request) {
                 $query->whereJsonContains('exam_types', $request->exam_type)
                     ->orWhereHas('questions', function ($q) use ($request) {
-                        $q->whereJsonContains('exam_types', $request->exam_type);
+                        $q->whereJsonContains('exam_types', $request->exam_type)
+                          ->orWhereHas('examCategories', function($cq) use ($request) {
+                            //   if (is_numeric($request->exam_type)) {
+                            //       $cq->where('exam_categories.id', $request->exam_type);
+                            //   } else {
+                            //       $cq->where('exam_categories.slug', $request->exam_type);
+                            //   }
+                            $cq->where('exam_categories.id', (int) $request->exam_type);
+                          });
                     });
             })
             ->with('tests:id,subject_id,name')
+            ->withCount('questions')
             ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+            ->get(['id', 'name', 'slug', 'description']);
 
         return response()->json([
             'success' => true,

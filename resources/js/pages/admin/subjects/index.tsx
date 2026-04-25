@@ -25,6 +25,12 @@ interface Subject {
     questions_count: number;
 }
 
+interface ExamCategory {
+    id: number;
+    name: string;
+    slug: string;
+}
+
 interface Props {
     subjects: {
         data: Subject[];
@@ -33,15 +39,18 @@ interface Props {
         per_page: number;
         total: number;
     };
+    examCategories: ExamCategory[];
     filters: {
         search?: string;
         is_active?: string;
+        exam_type?: string;
     };
 }
 
-export default function SubjectsIndex({ subjects, filters }: Props) {
+export default function SubjectsIndex({ subjects, examCategories, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [isActive, setIsActive] = useState(filters.is_active || '');
+    const [examType, setExamType] = useState(filters.exam_type || '');
     const [selectedSubjects, setSelectedSubjects] = useState<number[]>([]);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [subjectToDelete, setSubjectToDelete] = useState<{ id: number; name: string } | null>(null);
@@ -50,6 +59,7 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
         router.get(admin.subjects.index().url, {
             search: search || undefined,
             is_active: isActive !== 'all' ? isActive : undefined,
+            exam_type: examType !== 'all' ? examType : undefined,
         }, {
             preserveState: true,
             preserveScroll: true,
@@ -179,7 +189,7 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                 <Card>
                     <CardHeader>
                         <CardTitle>Filters</CardTitle>
-                        <CardDescription>Filter subjects by search or status</CardDescription>
+                        <CardDescription>Filter subjects by search, exam type or status</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="flex flex-col lg:flex-row gap-4">
@@ -196,6 +206,19 @@ export default function SubjectsIndex({ subjects, filters }: Props) {
                                 </div>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-2 flex-1 lg:flex-initial">
+                                <Select value={examType || 'all'} onValueChange={setExamType}>
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="All Exam Types" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Exam Types</SelectItem>
+                                        {examCategories.map((category) => (
+                                            <SelectItem key={category.id} value={category.slug}>
+                                                {category.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 <Select value={isActive || 'all'} onValueChange={setIsActive}>
                                     <SelectTrigger className="w-full sm:w-[180px]">
                                         <SelectValue placeholder="All Statuses" />

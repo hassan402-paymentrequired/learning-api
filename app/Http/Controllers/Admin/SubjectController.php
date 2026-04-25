@@ -30,11 +30,20 @@ class SubjectController extends Controller
             $query->where('is_active', $request->is_active === 'true');
         }
 
+        // Filter by exam type (using exam_types JSON column)
+        if ($request->has('exam_type') && $request->exam_type !== 'all') {
+            $query->whereJsonContains('exam_types', $request->exam_type);
+        }
+
         $subjects = $query->orderBy('name')->paginate(15);
+
+        // Get all exam categories for filter
+        $examCategories = \App\Models\ExamCategory::where('is_active', true)->orderBy('name')->get(['id', 'name', 'slug']);
 
         return Inertia::render('admin/subjects/index', [
             'subjects' => $subjects,
-            'filters' => $request->only(['search', 'is_active']),
+            'examCategories' => $examCategories,
+            'filters' => $request->only(['search', 'is_active', 'exam_type']),
         ]);
     }
 
@@ -65,8 +74,13 @@ class SubjectController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $examCategories = \App\Models\ExamCategory::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'flow_type']);
+
         return Inertia::render('admin/subjects/create', [
             'departments' => $departments,
+            'examCategories' => $examCategories,
         ]);
     }
 
@@ -79,7 +93,7 @@ class SubjectController extends Controller
             'name' => 'required|string|max:255|unique:subjects,name',
             'description' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
-            'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'exam_types.*' => 'required',
             'department_id' => 'nullable|exists:departments,id',
             'is_active' => 'boolean',
         ]);
@@ -108,9 +122,14 @@ class SubjectController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $examCategories = \App\Models\ExamCategory::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
         return Inertia::render('admin/subjects/edit', [
             'subject' => $subject,
             'departments' => $departments,
+            'examCategories' => $examCategories,
         ]);
     }
 
@@ -123,7 +142,7 @@ class SubjectController extends Controller
             'name' => 'required|string|max:255|unique:subjects,name,' . $subject->id,
             'description' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
-            'exam_types.*' => 'required|in:JAMB,DLI,UNILAG,GENERAL',
+            'exam_types.*' => 'required',
             'department_id' => 'nullable|exists:departments,id',
             'is_active' => 'boolean',
         ]);
@@ -238,7 +257,7 @@ class SubjectController extends Controller
                     'Expected Answer',
                     'Alternative Answers (comma-separated, optional)',
                     'Explanation (Optional)',
-                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                    'Exam Types (comma-separated slugs)'
                 ]);
 
                 // Sample rows
@@ -255,7 +274,7 @@ class SubjectController extends Controller
                     'Question Text',
                     'Expected Answer (true/false)',
                     'Explanation (Optional)',
-                    'Exam Types (comma-separated: JAMB,DLI,UNILAG,GENERAL)'
+                    'Exam Types (comma-separated slugs)'
                 ]);
 
                 // Sample rows
@@ -307,7 +326,7 @@ class SubjectController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:csv,txt,xlsx,xls,docx|max:10240', // 10MB max
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
-            'exam_type' => 'required|in:JAMB,DLI',
+            'exam_type' => 'required',
         ]);
 
         $questionType = $request->input('question_type');
@@ -404,8 +423,9 @@ class SubjectController extends Controller
             // Check if exam types are specified in the file
             if (!empty($examTypesString)) {
                 $examTypes = array_map('trim', explode(',', $examTypesString));
-                $examTypes = array_filter($examTypes, function ($type) {
-                    return in_array(strtoupper($type), ['JAMB', 'DLI', 'UNILAG', 'GENERAL']);
+                $validSlugs = \App\Models\ExamCategory::pluck('slug')->toArray();
+                $examTypes = array_filter($examTypes, function ($type) use ($validSlugs) {
+                    return in_array(strtoupper($type), array_map('strtoupper', $validSlugs));
                 });
                 $examTypes = array_map('strtoupper', $examTypes);
             }
