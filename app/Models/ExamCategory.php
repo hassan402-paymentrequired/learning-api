@@ -21,4 +21,12 @@ class ExamCategory extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    /**
+     * The exams that belong to the category.
+     */
+    public function exams(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Exam::class, 'exam_category_exam');
+    }
 }

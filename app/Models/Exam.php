@@ -41,4 +41,12 @@ class Exam extends Model
     {
         return $this->hasMany(ExamAttempt::class);
     }
+
+    /**
+     * The categories that belong to the exam.
+     */
+    public function examCategories(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(ExamCategory::class, 'exam_category_exam');
+    }
 }

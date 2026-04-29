@@ -10,6 +10,7 @@ use App\Models\Question;
 use App\Models\Subject;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ExamController extends Controller
 {
@@ -201,23 +202,37 @@ class ExamController extends Controller
     {
         $examType = $request->input('exam_type');
         $type = $request->input('type', 'past_question'); // Default to past_question
+        $hasExamCategoryExamPivot = Schema::hasTable('exam_category_exam');
+
+        // Resolve ID/Slug to both Slug and Name for broad matching
+        $examSearchValues = [$examType];
+        $category = \App\Models\ExamCategory::where('id', $examType)
+            ->orWhere('slug', $examType)
+            ->first();
+        if ($category) {
+            $examSearchValues = [$category->slug, $category->name];
+        }
+        $examSearchValues = array_unique(array_filter(array_map('strtolower', $examSearchValues)));
 
         if ($type === 'practice') {
             // For practice questions, fetch from subjects table based on exam_types
             // Check both subject's exam_types field and questions' exam_types
             $subjects = Subject::where('is_active', true)
-                ->where(function ($query) use ($examType) {
+                ->where(function ($query) use ($examType, $examSearchValues, $hasExamCategoryExamPivot) {
                     // Subjects that have the exam_type in their exam_types array
                     if ($examType) {
                         $query->whereJsonContains('exam_types', $examType)
-                            ->orWhereHas('questions', function ($q) use ($examType) {
+                            ->orWhereHas('questions', function ($q) use ($examType, $examSearchValues, $hasExamCategoryExamPivot) {
                                 $q->whereJsonContains('exam_types', $examType)
-                                  ->orWhereHas('examCategories', function ($cq) use ($examType) {
-                                      if (is_numeric($examType)) {
-                                          $cq->where('exam_categories.id', (int) $examType);
-                                      } else {
-                                          $cq->where('exam_categories.slug', $examType);
-                                      }
+                                  ->when($hasExamCategoryExamPivot, function ($qq) use ($examSearchValues) {
+                                      $qq->orWhereHas('examCategories', function ($cq) use ($examSearchValues) {
+                                          $cq->where(function ($subQ) use ($examSearchValues) {
+                                              foreach ($examSearchValues as $val) {
+                                                  $subQ->orWhereRaw('LOWER(slug) = ?', [$val])
+                                                      ->orWhereRaw('LOWER(name) = ?', [$val]);
+                                              }
+                                          });
+                                      });
                                   });
                             });
                     }
@@ -230,14 +245,25 @@ class ExamController extends Controller
             $query = Exam::where('is_active', true)
                 ->whereNotNull('subject');
 
-            // Filter by exam type
-            if ($examType) {
-                $query->where('exam_type', $examType);
+            // Filter by exam type category (matches legacy column OR new many-to-many link)
+            if (!empty($examSearchValues)) {
+                $query->where(function($q) use ($examSearchValues, $hasExamCategoryExamPivot) {
+                    foreach ($examSearchValues as $val) {
+                        $q->orWhereRaw('LOWER(exam_type) = ?', [$val]);
+                        if ($hasExamCategoryExamPivot) {
+                            $q->orWhereHas('examCategories', function($cq) use ($val) {
+                                $cq->whereRaw('LOWER(slug) = ?', [$val])
+                                    ->orWhereRaw('LOWER(name) = ?', [$val]);
+                            });
+                        }
+                    }
+                });
             }
 
             $subjects = $query->distinct()
                 ->pluck('subject')
                 ->filter()
+                ->values()
                 ->sort()
                 ->values();
         }
@@ -443,18 +469,31 @@ class ExamController extends Controller
         ]);
 
         $examType = $request->input('exam_type');
-
-        // If numeric ID provided, resolve to slug for the exams table
-        if (is_numeric($examType)) {
-            $category = \App\Models\ExamCategory::find($examType);
-            if ($category) {
-                $examType = $category->slug;
-            }
+        $hasExamCategoryExamPivot = Schema::hasTable('exam_category_exam');
+        
+        // Resolve ID/Slug to both Slug and Name for broad matching
+        $examSearchValues = [$examType];
+        $category = \App\Models\ExamCategory::where('id', $examType)
+            ->orWhere('slug', $examType)
+            ->first();
+        if ($category) {
+            $examSearchValues = [$category->slug, $category->name];
         }
+        $examSearchValues = array_unique(array_filter(array_map('strtolower', $examSearchValues)));
 
         // Exams are now only for past questions, so no need to filter by type
         $query = Exam::where('is_active', true)
-            ->where('exam_type', $examType)
+            ->where(function($q) use ($examSearchValues, $hasExamCategoryExamPivot) {
+                foreach ($examSearchValues as $val) {
+                    $q->orWhereRaw('LOWER(exam_type) = ?', [$val]);
+                    if ($hasExamCategoryExamPivot) {
+                        $q->orWhereHas('examCategories', function($cq) use ($val) {
+                            $cq->whereRaw('LOWER(slug) = ?', [$val])
+                                ->orWhereRaw('LOWER(name) = ?', [$val]);
+                        });
+                    }
+                }
+            })
             ->whereNotNull('year');
 
         // Filter by subjects if provided (array of subject names)
