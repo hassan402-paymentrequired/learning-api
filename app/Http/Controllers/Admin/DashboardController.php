@@ -40,11 +40,11 @@ class DashboardController extends Controller
             ->map(function ($attempt) {
                 return [
                     'id' => $attempt->id,
-                    'user_name' => $attempt->user->name,
-                    'exam_title' => $attempt->exam->title,
+                    'user_name' => $attempt->user?->name ?? '—',
+                    'exam_title' => $attempt->exam?->title ?? 'Practice / removed exam',
                     'score' => $attempt->score,
                     'percentage' => $attempt->percentage,
-                    'completed_at' => $attempt->completed_at->diffForHumans(),
+                    'completed_at' => $attempt->completed_at?->diffForHumans() ?? '—',
                 ];
             });
 
