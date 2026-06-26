@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ExamCategoryController;
+use App\Http\Controllers\Api\WaitlistController;
 
 /*
 |--------------------------------------------------------------------------
@@ -44,6 +45,8 @@ Route::post('/password-reset/resend-otp', [PasswordResetController::class, 'rese
 // Paystack callback and cancel (public routes - called by Paystack)
 Route::get('/subscriptions/callback', [SubscriptionController::class, 'callback']);
 Route::get('/subscriptions/cancel', [SubscriptionController::class, 'cancel']);
+
+Route::post('/waitlist', [WaitlistController::class, 'store']);
 
 // Protected routes - allow /me and /logout without email verification (needed for verification flow)
 Route::middleware('auth:api')->group(function () {
