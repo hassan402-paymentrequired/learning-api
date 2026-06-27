@@ -22,5 +22,7 @@ class DatabaseSeeder extends Seeder
             SubscriptionPlanSeeder::class,
             // UserSeeder::class,
         ]);
+
+        // Local wiped DB: php artisan db:seed --class=DevMinimumSeeder
     }
 }

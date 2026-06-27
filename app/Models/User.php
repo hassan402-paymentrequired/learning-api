@@ -27,6 +27,10 @@ class User extends Authenticatable implements JWTSubject
         'referred_by',
         'paystack_customer_code',
         'is_admin',
+        'push_notifications_enabled',
+        'morning_reminder_time',
+        'timezone',
+        'last_morning_push_date',
     ];
 
     /**
@@ -56,6 +60,8 @@ class User extends Authenticatable implements JWTSubject
             'two_factor_confirmed_at' => 'datetime',
             'subscription_expires_at' => 'datetime',
             'is_admin' => 'boolean',
+            'push_notifications_enabled' => 'boolean',
+            'last_morning_push_date' => 'date',
         ];
     }
 
@@ -73,6 +79,11 @@ class User extends Authenticatable implements JWTSubject
     public function streaks()
     {
         return $this->hasMany(UserStreak::class);
+    }
+
+    public function pushSubscriptions()
+    {
+        return $this->hasMany(PushSubscription::class);
     }
 
     /**

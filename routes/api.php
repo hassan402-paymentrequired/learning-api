@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ExamCategoryController;
+use App\Http\Controllers\Api\NotificationSettingsController;
+use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\WaitlistController;
 
 /*
@@ -47,6 +49,8 @@ Route::get('/subscriptions/callback', [SubscriptionController::class, 'callback'
 Route::get('/subscriptions/cancel', [SubscriptionController::class, 'cancel']);
 
 Route::post('/waitlist', [WaitlistController::class, 'store']);
+
+Route::get('/push/vapid-public-key', [PushSubscriptionController::class, 'vapidPublicKey']);
 
 // Protected routes - allow /me and /logout without email verification (needed for verification flow)
 Route::middleware('auth:api')->group(function () {
@@ -114,4 +118,10 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     // Profile routes
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
+
+    // Push notifications
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
+    Route::get('/notification-settings', [NotificationSettingsController::class, 'show']);
+    Route::put('/notification-settings', [NotificationSettingsController::class, 'update']);
 });
