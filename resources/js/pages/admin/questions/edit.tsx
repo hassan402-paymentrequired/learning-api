@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Form, Head, useForm } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
@@ -32,6 +33,7 @@ interface Question {
     subject: {
         id: number;
         name: string;
+        department_id?: number | null;
     } | null;
     subject_tests?: { id: number }[];
 }
@@ -75,8 +77,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function EditQuestion({ question, subjects, departments, subjectTests, examCategories }: Props) {
-    // Get department_id from question's subject if it exists
-    const initialDepartmentId = question.subject?.department_id || null;
+    const initialDepartmentId =
+        question.subject?.department_id ??
+        subjects.find((s) => s.id === question.subject_id)?.department_id ??
+        null;
     
     const { data, setData, patch, processing, errors } = useForm({
         department_id: initialDepartmentId,
@@ -98,20 +102,30 @@ export default function EditQuestion({ question, subjects, departments, subjectT
         test_ids: ((question as any).subject_tests ?? (question as any).subjectTests ?? []).map((t: { id: number }) => t.id),
     });
 
-    // Determine if any selected exam type has a departmental flow
     const selectedCategories = examCategories.filter(cat => data.exam_types.includes(cat.slug));
     const hasDepartmentalFlow = selectedCategories.some(cat => cat.flow_type === 'departmental');
-    const hasDliType = data.exam_types.includes('DLI');
 
-    // Filter subjects based on selected department when a departmental flow is selected
     const filteredSubjects = hasDepartmentalFlow && data.department_id
         ? subjects.filter(subject => subject.department_id === data.department_id)
         : subjects;
 
-    // Tests for the selected subject: show multi-select only when exam type is DLI
-    const testsForSubject = hasDliType && data.subject_id
+    const testsForSubject = hasDepartmentalFlow && data.subject_id
         ? subjectTests.filter(t => t.subject_id === parseInt(data.subject_id, 10))
         : [];
+
+    const handleExamTypesChange = (newExamTypes: string[]) => {
+        setData('exam_types', newExamTypes);
+
+        const stillHasDepartmental = examCategories
+            .filter(cat => newExamTypes.includes(cat.slug))
+            .some(cat => cat.flow_type === 'departmental');
+
+        if (!stillHasDepartmental) {
+            setData('department_id', null);
+            setData('subject_id', '');
+            setData('test_ids', []);
+        }
+    };
 
     const addAnswer = () => {
         const orders = ['A', 'B', 'C', 'D', 'E'];
@@ -173,45 +187,19 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                     <CardContent>
                         <form onSubmit={submit} className="space-y-6">
                             <div className="space-y-2">
-                                <Label>Available for Exam Types *</Label>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {examCategories.map((category) => (
-                                        <div key={category.id} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`exam_type_${category.slug}`}
-                                                checked={data.exam_types.includes(category.slug)}
-                                                onCheckedChange={(checked) => {
-                                                    const newExamTypes = checked
-                                                        ? [...data.exam_types, category.slug]
-                                                        : data.exam_types.filter((t) => t !== category.slug);
-                                                    
-                                                    setData('exam_types', newExamTypes);
-
-                                                    // Determine if we still have departmental flows or DLI
-                                                    const currentCategories = examCategories.filter(cat => newExamTypes.includes(cat.slug));
-                                                    const stillHasDepartmental = currentCategories.some(cat => cat.flow_type === 'departmental');
-                                                    const stillHasDli = newExamTypes.includes('DLI');
-
-                                                    // Clear department, subject and test_ids if no departmental flows are left
-                                                    if (!checked && category.flow_type === 'departmental' && !stillHasDepartmental) {
-                                                        setData('department_id', null);
-                                                        setData('subject_id', '');
-                                                        setData('test_ids', []);
-                                                    }
-                                                    
-                                                    if (!checked && category.slug === 'DLI' && !stillHasDli) {
-                                                        setData('test_ids', []);
-                                                    }
-                                                }}
-                                            />
-                                            <Label htmlFor={`exam_type_${category.slug}`} className="font-normal cursor-pointer">
-                                                {category.name}
-                                            </Label>
-                                        </div>
-                                    ))}
-                                </div>
+                                <Label htmlFor="exam_types">Available for Exam Types *</Label>
+                                <MultiSelect
+                                    id="exam_types"
+                                    options={examCategories.map((category) => ({
+                                        value: category.slug,
+                                        label: category.name,
+                                    }))}
+                                    value={data.exam_types}
+                                    onChange={handleExamTypesChange}
+                                    placeholder="Select exam types"
+                                />
                                 <p className="text-xs text-muted-foreground">
-                                    Select which exam types this question should be available for. You can select multiple.
+                                    Choose one or more exam categories this question belongs to.
                                 </p>
                                 <InputError message={errors.exam_types} />
                             </div>
@@ -286,38 +274,33 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                                 <InputError message={errors.subject_id} />
                             </div>
 
-                            {/* Tests multi-select: only when exam type is DLI and subject is selected */}
-                            {hasDliType && data.subject_id && (
+                            {hasDepartmentalFlow && data.subject_id && (
                                 <div className="grid gap-2">
-                                    <Label>Tests (optional)</Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        Assign this question to one or more tests. Only shown for DLI questions.
-                                    </p>
+                                    <Label htmlFor="test_ids">Tests (optional)</Label>
                                     {testsForSubject.length === 0 ? (
                                         <p className="text-sm text-muted-foreground py-2">
-                                            No tests yet for this subject. Go to Subjects → Manage Tests to add tests.
+                                            No tests yet for this course. Use Manage Tests on the department course page to add tests.
                                         </p>
                                     ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                            {testsForSubject.map((test) => (
-                                                <label
-                                                    key={test.id}
-                                                    className="flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <Checkbox
-                                                        checked={data.test_ids.includes(test.id)}
-                                                        onCheckedChange={(checked) => {
-                                                            const next = checked
-                                                                ? [...data.test_ids, test.id]
-                                                                : data.test_ids.filter((id) => id !== test.id);
-                                                            setData('test_ids', next);
-                                                        }}
-                                                    />
-                                                    <span className="text-sm">{test.name}</span>
-                                                </label>
-                                            ))}
-                                        </div>
+                                        <MultiSelect
+                                            id="test_ids"
+                                            options={testsForSubject.map((test) => ({
+                                                value: String(test.id),
+                                                label: test.name,
+                                            }))}
+                                            value={data.test_ids.map(String)}
+                                            onChange={(values) =>
+                                                setData(
+                                                    'test_ids',
+                                                    values.map((value) => parseInt(value, 10)),
+                                                )
+                                            }
+                                            placeholder="Select tests to assign this question to"
+                                        />
                                     )}
+                                    <p className="text-xs text-muted-foreground">
+                                        Assign this question to one or more tests for departmental practice.
+                                    </p>
                                     <InputError message={(errors as any).test_ids} />
                                 </div>
                             )}

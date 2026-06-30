@@ -215,9 +215,9 @@ export default function DepartmentShow({ department, subjects, filters }: Props)
                                     </div>
                                     <div className="flex gap-2 pt-1">
                                         <Button variant="default" size="sm" asChild className="flex-1">
-                                            <Link href={admin.subjects.show({ subject: subject.id }).url}>
+                                            <Link href={`/admin/departments/${department.id}/courses/${subject.id}`}>
                                                 <Eye className="mr-2 h-4 w-4" />
-                                                View Questions
+                                                View Course
                                             </Link>
                                         </Button>
                                         <Button variant="outline" size="sm" asChild>

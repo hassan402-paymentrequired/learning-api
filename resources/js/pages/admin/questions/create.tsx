@@ -19,6 +19,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import admin from '@/routes/admin';
 import { type BreadcrumbItem } from '@/types';
@@ -31,6 +32,7 @@ interface Subject {
     id: number;
     name: string;
     department_id: number | null;
+    exam_types: string[] | null;
 }
 
 interface Department {
@@ -57,6 +59,11 @@ interface Props {
     departments: Department[];
     subjectTests: SubjectTest[];
     examCategories: ExamCategory[];
+    defaults?: {
+        subject_id: string;
+        department_id: number | null;
+        exam_types: string[];
+    };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -64,10 +71,16 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Create Question', href: '#' },
 ];
 
-export default function CreateQuestion({ subjects, departments, subjectTests, examCategories }: Props) {
+export default function CreateQuestion({
+    subjects,
+    departments,
+    subjectTests,
+    examCategories,
+    defaults = { subject_id: '', department_id: null, exam_types: [] },
+}: Props) {
     const { data, setData, post, processing, errors } = useForm({
-        department_id: null as number | null,
-        subject_id: '',
+        department_id: defaults.department_id,
+        subject_id: defaults.subject_id,
         question_text: '',
         image: null as File | null,
         question_type: 'multiple_choice' as
@@ -77,7 +90,7 @@ export default function CreateQuestion({ subjects, departments, subjectTests, ex
             | 'true_false',
         explanation: '',
         expected_answer: '',
-        exam_types: [] as string[],
+        exam_types: defaults.exam_types,
         test_ids: [] as number[],
         answers: [
             { answer_text: '', is_correct: false, order: 'A' },
@@ -85,20 +98,36 @@ export default function CreateQuestion({ subjects, departments, subjectTests, ex
         ] as Array<{ answer_text: string; is_correct: boolean; order: string }>,
     });
 
-    // Determine if any selected exam type has a departmental flow
-    const selectedCategories = examCategories.filter(cat => data.exam_types.includes(cat.slug));
-    const hasDepartmentalFlow = selectedCategories.some(cat => cat.flow_type === 'departmental');
-    const hasDliType = data.exam_types.includes('DLI');
+    const selectedSubject = subjects.find(
+        (subject) => subject.id.toString() === data.subject_id,
+    );
+    const effectiveExamTypes = selectedSubject?.exam_types ?? data.exam_types;
 
-    // Filter subjects based on selected department when a departmental flow is selected
-    const filteredSubjects = hasDepartmentalFlow && data.department_id
-        ? subjects.filter(subject => subject.department_id === data.department_id)
+    const selectedCategories = examCategories.filter((cat) =>
+        effectiveExamTypes.includes(cat.slug),
+    );
+    const hasDepartmentalFlow = selectedCategories.some(
+        (cat) => cat.flow_type === 'departmental',
+    );
+
+    const filteredSubjects = data.department_id
+        ? subjects.filter((subject) => subject.department_id === data.department_id)
         : subjects;
 
-    // Tests for the selected subject: show multi-select only when exam type is DLI
-    const testsForSubject = hasDliType && data.subject_id
-        ? subjectTests.filter(t => t.subject_id === parseInt(data.subject_id, 10))
+    const testsForSubject = hasDepartmentalFlow && data.subject_id
+        ? subjectTests.filter((t) => t.subject_id === parseInt(data.subject_id, 10))
         : [];
+
+    const applySubjectSelection = (subjectId: string) => {
+        const subject = subjects.find((item) => item.id.toString() === subjectId);
+
+        setData('subject_id', subjectId);
+        setData('test_ids', []);
+        setData('exam_types', subject?.exam_types ?? []);
+        if (subject?.department_id) {
+            setData('department_id', subject.department_id);
+        }
+    };
 
     // Clear answers when question type changes to non-multiple_choice
     useEffect(() => {
@@ -234,103 +263,50 @@ export default function CreateQuestion({ subjects, departments, subjectTests, ex
                         )}
                         
                         <form onSubmit={submit} className="space-y-6">
-                            <div className="space-y-2">
-                                <Label>Available for Exam Types *</Label>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {examCategories.map((category) => (
-                                        <div key={category.id} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`exam_type_${category.slug}`}
-                                                checked={data.exam_types.includes(category.slug)}
-                                                onCheckedChange={(checked) => {
-                                                    const newExamTypes = checked
-                                                        ? [...data.exam_types, category.slug]
-                                                        : data.exam_types.filter((t) => t !== category.slug);
-                                                    
-                                                    setData('exam_types', newExamTypes);
-
-                                                    // Determine if we still have departmental flows or DLI
-                                                    const currentCategories = examCategories.filter(cat => newExamTypes.includes(cat.slug));
-                                                    const stillHasDepartmental = currentCategories.some(cat => cat.flow_type === 'departmental');
-                                                    const stillHasDli = newExamTypes.includes('DLI');
-
-                                                    // Clear department, subject and test_ids if no departmental flows are left
-                                                    if (!checked && category.flow_type === 'departmental' && !stillHasDepartmental) {
-                                                        setData('department_id', null);
-                                                        setData('subject_id', '');
-                                                        setData('test_ids', []);
-                                                    }
-                                                    
-                                                    if (!checked && category.slug === 'DLI' && !stillHasDli) {
-                                                        setData('test_ids', []);
-                                                    }
-                                                }}
-                                            />
-                                            <Label htmlFor={`exam_type_${category.slug}`} className="font-normal cursor-pointer">
-                                                {category.name}
-                                            </Label>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="department_id">Department (optional)</Label>
+                                <Select
+                                    value={data.department_id?.toString() || 'all'}
+                                    onValueChange={(value) => {
+                                        setData('department_id', value === 'all' ? null : parseInt(value, 10));
+                                        setData('subject_id', '');
+                                        setData('test_ids', []);
+                                        setData('exam_types', []);
+                                    }}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="All departments" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All departments</SelectItem>
+                                        {departments.map((department) => (
+                                            <SelectItem
+                                                key={department.id}
+                                                value={department.id.toString()}
+                                            >
+                                                {department.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 <p className="text-xs text-muted-foreground">
-                                    Select which exam types this question should
-                                    be available for. You can select multiple.
+                                    Filter courses by department, or leave as all for JAMB and other subjects.
                                 </p>
-                                <InputError message={errors.exam_types} />
                             </div>
 
-                            {/* Department Selection for Departmental Flows (DLI/UNILAG/etc) */}
-                            {hasDepartmentalFlow && (
-                                <div className="grid gap-2">
-                                    <Label htmlFor="department_id">Department *</Label>
-                                    <Select
-                                        value={data.department_id?.toString() || ''}
-                                        onValueChange={(value) => {
-                                            setData('department_id', value ? parseInt(value) : null);
-                                            setData('subject_id', '');
-                                            setData('test_ids', []);
-                                        }}
-                                        required
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select a department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {departments.map((department) => (
-                                                <SelectItem
-                                                    key={department.id}
-                                                    value={department.id.toString()}
-                                                >
-                                                    {department.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground">
-                                        Department is required for DLI/Unilag questions.
-                                    </p>
-                                    <InputError message={(errors as any).department_id} />
-                                </div>
-                            )}
-
                             <div className="grid gap-2">
-                                <Label htmlFor="subject_id">Subject *</Label>
+                                <Label htmlFor="subject_id">Subject / Course *</Label>
                                 <Select
                                     value={data.subject_id}
-                                        onValueChange={(value) => {
-                                            setData('subject_id', value);
-                                            setData('test_ids', []); // Reset tests when subject changes
-                                        }}
+                                    onValueChange={applySubjectSelection}
                                     required
                                     disabled={filteredSubjects.length === 0}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder={
-                                            (data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && !data.department_id
-                                                ? "Select a department first"
-                                                : filteredSubjects.length === 0
-                                                ? "No subjects available"
-                                                : "Select a subject"
+                                            filteredSubjects.length === 0
+                                                ? 'No subjects available'
+                                                : 'Select a subject or course'
                                         } />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -344,46 +320,36 @@ export default function CreateQuestion({ subjects, departments, subjectTests, ex
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {(data.exam_types.includes('DLI') || data.exam_types.includes('UNILAG')) && !data.department_id && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Please select a department first to see available subjects.
-                                    </p>
-                                )}
                                 <InputError message={errors.subject_id} />
                             </div>
 
-                            {/* Tests multi-select: only when exam type is DLI and subject is selected */}
-                            {data.exam_types.includes('DLI') && data.subject_id && (
+                            {hasDepartmentalFlow && data.subject_id && (
                                 <div className="grid gap-2">
-                                    <Label>Tests (optional)</Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        Assign this question to one or more tests. Only shown for DLI questions. Create tests from the subject page.
-                                    </p>
+                                    <Label htmlFor="test_ids">Tests (optional)</Label>
                                     {testsForSubject.length === 0 ? (
                                         <p className="text-sm text-muted-foreground py-2">
-                                            No tests yet for this subject. Go to Subjects → {filteredSubjects.find(s => s.id.toString() === data.subject_id)?.name} → Manage Tests to add tests.
+                                            No tests yet for this course. Use Manage Tests on the department course page to add tests.
                                         </p>
                                     ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                            {testsForSubject.map((test) => (
-                                                <label
-                                                    key={test.id}
-                                                    className="flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <Checkbox
-                                                        checked={data.test_ids.includes(test.id)}
-                                                        onCheckedChange={(checked) => {
-                                                            const next = checked
-                                                                ? [...data.test_ids, test.id]
-                                                                : data.test_ids.filter((id) => id !== test.id);
-                                                            setData('test_ids', next);
-                                                        }}
-                                                    />
-                                                    <span className="text-sm">{test.name}</span>
-                                                </label>
-                                            ))}
-                                        </div>
+                                        <MultiSelect
+                                            id="test_ids"
+                                            options={testsForSubject.map((test) => ({
+                                                value: String(test.id),
+                                                label: test.name,
+                                            }))}
+                                            value={data.test_ids.map(String)}
+                                            onChange={(values) =>
+                                                setData(
+                                                    'test_ids',
+                                                    values.map((value) => parseInt(value, 10)),
+                                                )
+                                            }
+                                            placeholder="Select tests to assign this question to"
+                                        />
                                     )}
+                                    <p className="text-xs text-muted-foreground">
+                                        Assign this question to one or more tests for departmental practice.
+                                    </p>
                                     <InputError message={(errors as any).test_ids} />
                                 </div>
                             )}

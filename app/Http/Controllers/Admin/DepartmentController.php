@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
+use App\Models\Question;
+use App\Models\Subject;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
@@ -90,6 +92,30 @@ class DepartmentController extends Controller
                 'search' => $request->input('search', ''),
                 'is_active' => $request->input('is_active', 'all'),
             ],
+        ]);
+    }
+
+    /**
+     * Display a single course (subject) within a department.
+     */
+    public function showCourse(Request $request, Department $department, Subject $subject)
+    {
+        if ($subject->department_id !== $department->id) {
+            abort(404);
+        }
+
+        $subject->loadCount(['questions', 'tests']);
+
+        $questions = Question::where('subject_id', $subject->id)
+            ->withCount('answers')
+            ->orderBy('created_at', 'desc')
+            ->paginate(20)
+            ->withQueryString();
+
+        return Inertia::render('admin/departments/course', [
+            'department' => $department,
+            'subject' => $subject,
+            'questions' => $questions,
         ]);
     }
 

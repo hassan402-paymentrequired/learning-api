@@ -65,12 +65,12 @@ class QuestionController extends Controller
     /**
      * Show the form for creating a new question (standalone).
      */
-    public function create()
+    public function create(Request $request, ExamCategoryResolver $resolver)
     {
         $subjects = Subject::where('is_active', true)
             ->with('department:id,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'department_id']);
+            ->get(['id', 'name', 'department_id', 'exam_types']);
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $subjectTests = SubjectTest::with('subject:id,name')
             ->orderBy('subject_id')
@@ -81,11 +81,29 @@ class QuestionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'slug', 'flow_type']);
 
+        $defaults = [
+            'subject_id' => '',
+            'department_id' => null,
+            'exam_types' => [],
+        ];
+
+        if ($request->filled('subject_id')) {
+            $subject = Subject::where('is_active', true)->find($request->subject_id);
+            if ($subject) {
+                $defaults['subject_id'] = (string) $subject->id;
+                $defaults['department_id'] = $subject->department_id;
+                $defaults['exam_types'] = $resolver->normalizeToSlugs($subject->exam_types ?? []);
+            }
+        } elseif ($request->filled('department_id')) {
+            $defaults['department_id'] = (int) $request->department_id;
+        }
+
         return Inertia::render('admin/questions/create', [
             'subjects' => $subjects,
             'departments' => $departments,
             'subjectTests' => $subjectTests,
             'examCategories' => $examCategories,
+            'defaults' => $defaults,
         ]);
     }
 
@@ -110,14 +128,11 @@ class QuestionController extends Controller
             'question_text' => 'required|string',
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
-            'exam_types' => 'required|array|min:1',
+            'exam_types' => 'sometimes|array',
             'exam_types.*' => 'required',
+            'test_ids' => 'nullable|array',
+            'test_ids.*' => 'integer|exists:subject_tests,id',
         ];
-
-        if ($resolver->requiresDepartment($request->input('exam_types', []))) {
-            $rules['test_ids'] = 'nullable|array';
-            $rules['test_ids.*'] = 'integer|exists:subject_tests,id';
-        }
 
         // Conditional validation based on question type
         if ($request->question_type === 'multiple_choice') {
@@ -133,7 +148,17 @@ class QuestionController extends Controller
         }
 
         $validated = $request->validate($rules);
-        $validated['exam_types'] = $resolver->normalizeToSlugs($validated['exam_types']);
+
+        $subject = Subject::findOrFail($validated['subject_id']);
+        $examTypes = $resolver->normalizeToSlugs($subject->exam_types ?? []);
+
+        if (empty($examTypes)) {
+            return back()
+                ->withErrors(['subject_id' => 'This subject has no exam types configured. Update the subject first.'])
+                ->withInput();
+        }
+
+        $validated['exam_types'] = $examTypes;
 
         try {
             // Conditional validation
@@ -251,7 +276,7 @@ class QuestionController extends Controller
     /**
      * Show the form for editing the specified question (standalone).
      */
-    public function edit(Question $question)
+    public function edit(Question $question, ExamCategoryResolver $resolver)
     {
         $question->load('answers', 'subject', 'subject.department', 'subjectTests');
         $subjects = Subject::where('is_active', true)
@@ -266,12 +291,9 @@ class QuestionController extends Controller
 
         $examCategories = \App\Models\ExamCategory::where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+            ->get(['id', 'name', 'slug', 'flow_type']);
 
-        // Ensure exam_types is an array
-        if (!$question->exam_types || !is_array($question->exam_types)) {
-            $question->exam_types = [];
-        }
+        $question->exam_types = $resolver->normalizeToSlugs($question->exam_types ?? []);
 
         return Inertia::render('admin/questions/edit', [
             'question' => $question,
