@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\ExamCategoryResolver;
 use App\Models\Exam;
 use App\Models\ExamAttempt;
 use App\Models\Question;
@@ -88,7 +89,7 @@ class ExamAttemptController extends Controller
         ], 201);
     }
 
-    public function startPracticeSession(Request $request)
+    public function startPracticeSession(Request $request, ExamCategoryResolver $resolver)
     {
         $user = auth()->user();
         $deviceId = $request->header('X-Device-Id');
@@ -137,17 +138,8 @@ class ExamAttemptController extends Controller
             $subjectModel = Subject::where('name', $subjectName)->first();
             if (!$subjectModel) continue;
 
-            $query = Question::where('subject_id', $subjectModel->id)
-                ->where(function ($q) use ($examType) {
-                    $q->whereJsonContains('exam_types', $examType)
-                      ->orWhereHas('examCategories', function ($cq) use ($examType) {
-                          if (is_numeric($examType)) {
-                              $cq->where('exam_categories.id', (int) $examType);
-                          } else {
-                              $cq->where('exam_categories.slug', $examType);
-                          }
-                      });
-                });
+            $query = Question::where('subject_id', $subjectModel->id);
+            $resolver->applyQuestionExamTypeFilter($query, $examType);
 
             if ($subjectTestId) {
                 $query->whereHas('subjectTests', function ($q) use ($subjectTestId) {

@@ -3,13 +3,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { Head } from '@inertiajs/react';
-import { Plus, Search, Power, PowerOff, Trash2, Edit, MoreVertical } from 'lucide-react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { Plus, Search, Power, PowerOff, Trash2, Edit, MoreVertical, Save } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Link, router } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 
 interface Department {
@@ -40,7 +43,26 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [isActive, setIsActive] = useState(filters.is_active || '');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [departmentToDelete, setDepartmentToDelete] = useState<{ id: number; name: string } | null>(null);
+
+    const createForm = useForm({
+        name: '',
+        description: '',
+        is_active: true,
+    });
+
+    const handleCreate = (e: React.FormEvent) => {
+        e.preventDefault();
+        createForm.post(admin.departments.store().url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setCreateDialogOpen(false);
+                createForm.reset();
+                toast.success('Department created successfully');
+            },
+        });
+    };
 
     const handleFilter = () => {
         router.get('/admin/departments', {
@@ -99,11 +121,9 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
                             <p className="text-muted-foreground">Manage departments for Unilag practice</p>
                         </div>
                     </div>
-                    <Button asChild>
-                        <Link href="/admin/departments/create">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Department
-                        </Link>
+                    <Button onClick={() => setCreateDialogOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Department
                     </Button>
                 </div>
 
@@ -284,6 +304,78 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
                         </div>
                     </div>
                 )}
+
+                {/* Create Dialog */}
+                <Dialog
+                    open={createDialogOpen}
+                    onOpenChange={(open) => {
+                        setCreateDialogOpen(open);
+                        if (!open) {
+                            createForm.reset();
+                            createForm.clearErrors();
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Add Department</DialogTitle>
+                            <DialogDescription>
+                                Create a new department for the DLI practice flow.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleCreate} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="create-name">Department Name *</Label>
+                                <Input
+                                    id="create-name"
+                                    value={createForm.data.name}
+                                    onChange={(e) => createForm.setData('name', e.target.value)}
+                                    placeholder="e.g., Business Administration Year 1"
+                                    required
+                                />
+                                {createForm.errors.name && (
+                                    <p className="text-sm text-red-500">{createForm.errors.name}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="create-description">Description</Label>
+                                <Textarea
+                                    id="create-description"
+                                    value={createForm.data.description}
+                                    onChange={(e) => createForm.setData('description', e.target.value)}
+                                    placeholder="Optional description"
+                                    rows={3}
+                                />
+                                {createForm.errors.description && (
+                                    <p className="text-sm text-red-500">{createForm.errors.description}</p>
+                                )}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="create-is-active"
+                                    checked={createForm.data.is_active}
+                                    onCheckedChange={(checked) => createForm.setData('is_active', checked === true)}
+                                />
+                                <Label htmlFor="create-is-active" className="cursor-pointer">
+                                    Active (visible to students)
+                                </Label>
+                            </div>
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setCreateDialogOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={createForm.processing}>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {createForm.processing ? 'Creating...' : 'Create'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Delete Confirmation Dialog */}
                 <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

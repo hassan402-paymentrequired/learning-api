@@ -4,13 +4,15 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { Head } from '@inertiajs/react';
-import { Plus, Search, Power, PowerOff, Trash2, Edit, FileQuestion, Eye, MoreVertical } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Plus, Search, Power, PowerOff, Trash2, Edit, FileQuestion, Eye, MoreVertical, Save } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
-import { Link, router } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { toast } from 'sonner';
 
 interface Subject {
@@ -25,10 +27,16 @@ interface Subject {
     questions_count: number;
 }
 
+interface Department {
+    id: number;
+    name: string;
+}
+
 interface ExamCategory {
     id: number;
     name: string;
     slug: string;
+    flow_type: 'standard' | 'departmental';
 }
 
 interface Props {
@@ -39,6 +47,7 @@ interface Props {
         per_page: number;
         total: number;
     };
+    departments: Department[];
     examCategories: ExamCategory[];
     filters: {
         search?: string;
@@ -47,13 +56,54 @@ interface Props {
     };
 }
 
-export default function SubjectsIndex({ subjects, examCategories, filters }: Props) {
+export default function SubjectsIndex({ subjects, departments, examCategories, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [isActive, setIsActive] = useState(filters.is_active || '');
     const [examType, setExamType] = useState(filters.exam_type || '');
     const [selectedSubjects, setSelectedSubjects] = useState<number[]>([]);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [subjectToDelete, setSubjectToDelete] = useState<{ id: number; name: string } | null>(null);
+
+    const createForm = useForm({
+        name: '',
+        description: '',
+        exam_types: [] as string[],
+        department_id: null as number | null,
+        is_active: true,
+    });
+
+    const hasDepartmentalFlow = examCategories
+        .filter((cat) => createForm.data.exam_types.includes(cat.slug))
+        .some((cat) => cat.flow_type === 'departmental');
+
+    const handleExamTypesChange = (newExamTypes: string[]) => {
+        createForm.setData('exam_types', newExamTypes);
+
+        const stillHasDepartmental = examCategories
+            .filter((cat) => newExamTypes.includes(cat.slug))
+            .some((cat) => cat.flow_type === 'departmental');
+
+        if (!stillHasDepartmental) {
+            createForm.setData('department_id', null);
+        }
+    };
+
+    const handleCreate = (e: React.FormEvent) => {
+        e.preventDefault();
+        createForm.post(admin.subjects.store().url, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                setCreateDialogOpen(false);
+                createForm.reset();
+                toast.success('Subject created successfully');
+            },
+            onError: () => {
+                setCreateDialogOpen(true);
+            },
+        });
+    };
 
     const handleFilter = () => {
         router.get(admin.subjects.index().url, {
@@ -140,11 +190,9 @@ export default function SubjectsIndex({ subjects, examCategories, filters }: Pro
                             <p className="text-muted-foreground">Manage subjects for practice exams</p>
                         </div>
                     </div>
-                    <Button asChild>
-                        <Link href={admin.subjects.create().url}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Subject
-                        </Link>
+                    <Button onClick={() => setCreateDialogOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Subject
                     </Button>
                 </div>
 
@@ -360,6 +408,112 @@ export default function SubjectsIndex({ subjects, examCategories, filters }: Pro
                         </Button>
                     </div>
                 )}
+
+                {/* Create Dialog */}
+                <Dialog
+                    open={createDialogOpen}
+                    onOpenChange={(open) => {
+                        setCreateDialogOpen(open);
+                        if (!open) {
+                            createForm.reset();
+                            createForm.clearErrors();
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>Add Subject</DialogTitle>
+                            <DialogDescription>
+                                Create a new subject for practice exams.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleCreate} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="create-name">Subject Name *</Label>
+                                <Input
+                                    id="create-name"
+                                    value={createForm.data.name}
+                                    onChange={(e) => createForm.setData('name', e.target.value)}
+                                    placeholder="e.g., Mathematics, English, Physics"
+                                    required
+                                />
+                                {createForm.errors.name && (
+                                    <p className="text-sm text-red-500">{createForm.errors.name}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="create-description">Description</Label>
+                                <Textarea
+                                    id="create-description"
+                                    value={createForm.data.description}
+                                    onChange={(e) => createForm.setData('description', e.target.value)}
+                                    placeholder="Optional description"
+                                    rows={2}
+                                />
+                                {createForm.errors.description && (
+                                    <p className="text-sm text-red-500">{createForm.errors.description}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="create-exam-types">Available for Exam Types *</Label>
+                                <MultiSelect
+                                    id="create-exam-types"
+                                    options={examCategories.map((category) => ({
+                                        value: category.slug,
+                                        label: category.name,
+                                    }))}
+                                    value={createForm.data.exam_types}
+                                    onChange={handleExamTypesChange}
+                                    placeholder="Select exam types"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Choose one or more exam categories this subject belongs to.
+                                </p>
+                                {createForm.errors.exam_types && (
+                                    <p className="text-sm text-red-500">{createForm.errors.exam_types}</p>
+                                )}
+                            </div>
+                            {hasDepartmentalFlow && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="create-department">Department *</Label>
+                                    <Select
+                                        value={createForm.data.department_id?.toString() || ''}
+                                        onValueChange={(value) =>
+                                            createForm.setData('department_id', value ? parseInt(value) : null)
+                                        }
+                                    >
+                                        <SelectTrigger id="create-department">
+                                            <SelectValue placeholder="Select a department" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {departments.map((dept) => (
+                                                <SelectItem key={dept.id} value={dept.id.toString()}>
+                                                    {dept.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {createForm.errors.department_id && (
+                                        <p className="text-sm text-red-500">{createForm.errors.department_id}</p>
+                                    )}
+                                </div>
+                            )}
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setCreateDialogOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={createForm.processing}>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {createForm.processing ? 'Creating...' : 'Create'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Delete Confirmation Dialog */}
                 <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

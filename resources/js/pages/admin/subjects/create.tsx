@@ -163,17 +163,6 @@ export default function CreateSubject({ departments, examCategories }: Props) {
                                 </div>
                             )}
 
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="is_active"
-                                    checked={data.is_active}
-                                    onCheckedChange={(checked) => setData('is_active', checked === true)}
-                                />
-                                <Label htmlFor="is_active" className="cursor-pointer">
-                                    Active (visible to students)
-                                </Label>
-                            </div>
-
                             <div className="flex gap-2 pt-4">
                                 <Button type="submit" disabled={processing}>
                                     <Save className="mr-2 h-4 w-4" />

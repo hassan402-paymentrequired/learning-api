@@ -8,6 +8,7 @@ use App\Models\Department;
 use App\Models\Exam;
 use App\Models\Question;
 use App\Models\Subject;
+use App\Services\ExamCategoryResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -198,45 +199,30 @@ class ExamController extends Controller
     /**
      * Get list of available subjects for an exam type.
      */
-    public function subjects(Request $request)
+    public function subjects(Request $request, ExamCategoryResolver $resolver)
     {
         $examType = $request->input('exam_type');
         $type = $request->input('type', 'past_question'); // Default to past_question
         $hasExamCategoryExamPivot = Schema::hasTable('exam_category_exam');
 
-        // Resolve ID/Slug to both Slug and Name for broad matching
-        $examSearchValues = [$examType];
-        $category = \App\Models\ExamCategory::where('id', $examType)
-            ->orWhere('slug', $examType)
-            ->first();
+        $examSearchValues = array_unique(array_filter(array_map(
+            'strtolower',
+            $resolver->matchTokens($examType)
+        )));
+        $category = $resolver->resolve($examType);
         if ($category) {
-            $examSearchValues = [$category->slug, $category->name];
+            $examSearchValues[] = strtolower($category->slug);
+            $examSearchValues[] = strtolower($category->name);
         }
-        $examSearchValues = array_unique(array_filter(array_map('strtolower', $examSearchValues)));
+        $examSearchValues = array_values(array_unique($examSearchValues));
 
         if ($type === 'practice') {
-            // For practice questions, fetch from subjects table based on exam_types
-            // Check both subject's exam_types field and questions' exam_types
-            $subjects = Subject::where('is_active', true)
-                ->where(function ($query) use ($examType, $examSearchValues, $hasExamCategoryExamPivot) {
-                    // Subjects that have the exam_type in their exam_types array
-                    if ($examType) {
-                        $query->whereJsonContains('exam_types', $examType)
-                            ->orWhereHas('questions', function ($q) use ($examType, $examSearchValues, $hasExamCategoryExamPivot) {
-                                $q->whereJsonContains('exam_types', $examType)
-                                  ->when($hasExamCategoryExamPivot, function ($qq) use ($examSearchValues) {
-                                      $qq->orWhereHas('examCategories', function ($cq) use ($examSearchValues) {
-                                          $cq->where(function ($subQ) use ($examSearchValues) {
-                                              foreach ($examSearchValues as $val) {
-                                                  $subQ->orWhereRaw('LOWER(slug) = ?', [$val])
-                                                      ->orWhereRaw('LOWER(name) = ?', [$val]);
-                                              }
-                                          });
-                                      });
-                                  });
-                            });
-                    }
-                })
+            $subjectsQuery = Subject::where('is_active', true);
+            if ($examType) {
+                $resolver->applySubjectExamTypeFilter($subjectsQuery, $examType);
+            }
+
+            $subjects = $subjectsQuery
                 ->pluck('name')
                 ->sort()
                 ->values();
@@ -279,7 +265,7 @@ class ExamController extends Controller
      * Used for practice mode where questions are randomly selected.
      * Non-subscribed users are limited to 5 questions maximum.
      */
-    public function getPracticeQuestions(Request $request)
+    public function getPracticeQuestions(Request $request, ExamCategoryResolver $resolver)
     {
         $user = auth()->user();
         $deviceId = $request->header('X-Device-Id');
@@ -317,17 +303,8 @@ class ExamController extends Controller
 
         // OPTIMIZATION: Use database-level filtering and bulk operations
         // Step 1: Get question IDs first (lightweight query)
-        $query = Question::where('subject_id', $subjectModel->id)
-            ->where(function ($q) use ($examType) {
-                $q->whereJsonContains('exam_types', $examType)
-                  ->orWhereHas('examCategories', function ($cq) use ($examType) {
-                      if (is_numeric($examType)) {
-                          $cq->where('exam_categories.id', (int) $examType);
-                      } else {
-                          $cq->where('exam_categories.slug', $examType);
-                      }
-                  });
-            });
+        $query = Question::where('subject_id', $subjectModel->id);
+        $resolver->applyQuestionExamTypeFilter($query, $examType);
 
         // When subject_test_id provided (DLI), filter to questions belonging to that test
         if ($subjectTestId) {
@@ -460,7 +437,7 @@ class ExamController extends Controller
      * Get available years for past questions.
      * Used to show year selection for past question mode.
      */
-    public function getAvailableYears(Request $request)
+    public function getAvailableYears(Request $request, ExamCategoryResolver $resolver)
     {
         $request->validate([
             'exam_type' => 'required|string',
@@ -471,15 +448,16 @@ class ExamController extends Controller
         $examType = $request->input('exam_type');
         $hasExamCategoryExamPivot = Schema::hasTable('exam_category_exam');
         
-        // Resolve ID/Slug to both Slug and Name for broad matching
-        $examSearchValues = [$examType];
-        $category = \App\Models\ExamCategory::where('id', $examType)
-            ->orWhere('slug', $examType)
-            ->first();
+        $examSearchValues = array_unique(array_filter(array_map(
+            'strtolower',
+            $resolver->matchTokens($examType)
+        )));
+        $category = $resolver->resolve($examType);
         if ($category) {
-            $examSearchValues = [$category->slug, $category->name];
+            $examSearchValues[] = strtolower($category->slug);
+            $examSearchValues[] = strtolower($category->name);
         }
-        $examSearchValues = array_unique(array_filter(array_map('strtolower', $examSearchValues)));
+        $examSearchValues = array_values(array_unique($examSearchValues));
 
         // Exams are now only for past questions, so no need to filter by type
         $query = Exam::where('is_active', true)
@@ -546,7 +524,7 @@ class ExamController extends Controller
     /**
      * Get subjects for a specific department (filtered by exam_type).
      */
-    public function departmentSubjects(Request $request, $departmentId)
+    public function departmentSubjects(Request $request, ExamCategoryResolver $resolver, $departmentId)
     {
        $v = $request->validate([
             'exam_type' => 'required',
@@ -558,22 +536,12 @@ class ExamController extends Controller
             ->where('is_active', true)
             ->firstOrFail();
 
-        $subjects = Subject::where('is_active', true)
-            ->where('department_id', $department->id)
-            ->where(function ($query) use ($request) {
-                $query->whereJsonContains('exam_types', $request->exam_type)
-                    ->orWhereHas('questions', function ($q) use ($request) {
-                        $q->whereJsonContains('exam_types', $request->exam_type)
-                          ->orWhereHas('examCategories', function($cq) use ($request) {
-                            //   if (is_numeric($request->exam_type)) {
-                            //       $cq->where('exam_categories.id', $request->exam_type);
-                            //   } else {
-                            //       $cq->where('exam_categories.slug', $request->exam_type);
-                            //   }
-                            $cq->where('exam_categories.id', (int) $request->exam_type);
-                          });
-                    });
-            })
+        $subjectsQuery = Subject::where('is_active', true)
+            ->where('department_id', $department->id);
+
+        $resolver->applySubjectExamTypeFilter($subjectsQuery, $request->exam_type);
+
+        $subjects = $subjectsQuery
             ->with('tests:id,subject_id,name')
             ->withCount('questions')
             ->orderBy('name')

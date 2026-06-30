@@ -13,7 +13,6 @@ class ExamCategory extends Model
         'name',
         'slug',
         'description',
-        'icon_name',
         'flow_type',
         'is_active',
     ];

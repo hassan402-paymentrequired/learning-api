@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Subject;
 use App\Models\SubjectTest;
 use App\Models\Question;
+use App\Services\ExamCategoryResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -91,7 +92,7 @@ class QuestionController extends Controller
     /**
      * Store a newly created question (standalone).
      */
-    public function store(Request $request)
+    public function store(Request $request, ExamCategoryResolver $resolver)
     {
         // Log incoming request data for debugging
         Log::info('Question creation request', [
@@ -113,8 +114,7 @@ class QuestionController extends Controller
             'exam_types.*' => 'required',
         ];
 
-        // When DLI is selected, allow optional test_ids (subject tests for this subject)
-        if (in_array('DLI', $request->input('exam_types', []))) {
+        if ($resolver->requiresDepartment($request->input('exam_types', []))) {
             $rules['test_ids'] = 'nullable|array';
             $rules['test_ids.*'] = 'integer|exists:subject_tests,id';
         }
@@ -133,6 +133,7 @@ class QuestionController extends Controller
         }
 
         $validated = $request->validate($rules);
+        $validated['exam_types'] = $resolver->normalizeToSlugs($validated['exam_types']);
 
         try {
             // Conditional validation
@@ -182,8 +183,10 @@ class QuestionController extends Controller
                 'is_active' => true, // New questions are active by default
             ]);
 
-            // Sync subject tests when DLI is selected (only tests that belong to this subject)
-            if (in_array('DLI', $validated['exam_types']) && !empty($validated['test_ids'] ?? [])) {
+            $resolver->syncQuestionCategories($question, $validated['exam_types']);
+
+            // Sync subject tests for departmental categories (only tests that belong to this subject)
+            if ($resolver->requiresDepartment($validated['exam_types']) && !empty($validated['test_ids'] ?? [])) {
                 $validTestIds = SubjectTest::where('subject_id', $validated['subject_id'])
                     ->whereIn('id', $validated['test_ids'])
                     ->pluck('id')
@@ -282,7 +285,7 @@ class QuestionController extends Controller
     /**
      * Update the specified question (standalone).
      */
-    public function update(Request $request, Question $question)
+    public function update(Request $request, Question $question, ExamCategoryResolver $resolver)
     {
         // First validate question_type to determine conditional rules
         $request->validate([
@@ -301,8 +304,7 @@ class QuestionController extends Controller
         'exam_types.*' => 'required',
     ];
 
-        // When DLI is selected, allow optional test_ids
-        if (in_array('DLI', $request->input('exam_types', []))) {
+        if ($resolver->requiresDepartment($request->input('exam_types', []))) {
             $rules['test_ids'] = 'nullable|array';
             $rules['test_ids.*'] = 'integer|exists:subject_tests,id';
         }
@@ -322,6 +324,7 @@ class QuestionController extends Controller
         }
 
         $validated = $request->validate($rules);
+        $validated['exam_types'] = $resolver->normalizeToSlugs($validated['exam_types']);
 
         // Handle image upload
         if ($request->hasFile('image')) {
@@ -376,8 +379,10 @@ class QuestionController extends Controller
             'image' => $validated['image'],
         ]);
 
-        // Sync subject tests when DLI is selected
-        if (in_array('DLI', $validated['exam_types']) && array_key_exists('test_ids', $validated)) {
+        $resolver->syncQuestionCategories($question, $validated['exam_types']);
+
+        // Sync subject tests for departmental categories
+        if ($resolver->requiresDepartment($validated['exam_types']) && array_key_exists('test_ids', $validated)) {
             $validTestIds = SubjectTest::where('subject_id', $validated['subject_id'])
                 ->whereIn('id', $validated['test_ids'] ?? [])
                 ->pluck('id')
@@ -551,7 +556,7 @@ class QuestionController extends Controller
     /**
      * Handle bulk upload of questions from CSV.
      */
-    public function bulkUpload(Request $request)
+    public function bulkUpload(Request $request, ExamCategoryResolver $resolver)
     {
         $request->validate([
             'file' => 'required|file|mimes:csv,txt|max:10240', // 10MB max
@@ -618,12 +623,8 @@ class QuestionController extends Controller
             $examTypes = [];
             if (!empty($examTypesString)) {
                 $examTypes = array_map('trim', explode(',', $examTypesString));
-                $validSlugs = \App\Models\ExamCategory::pluck('slug')->toArray();
-                $examTypes = array_filter($examTypes, function ($type) use ($validSlugs) {
-                    return in_array(strtoupper($type), array_map('strtoupper', $validSlugs));
-                });
-                $examTypes = array_map('strtoupper', $examTypes);
             }
+            $examTypes = $resolver->normalizeToSlugs($examTypes);
             if (empty($examTypes)) {
                 $errors[] = "Row {$rowNumber}: At least one valid exam type is required.";
                 continue;
@@ -752,6 +753,8 @@ class QuestionController extends Controller
                         ]);
                     }
                 }
+
+                $resolver->syncQuestionCategories($question, $examTypes);
 
                 $imported++;
             } catch (\Exception $e) {

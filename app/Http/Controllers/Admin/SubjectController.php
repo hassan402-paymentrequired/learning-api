@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Subject;
 use App\Models\Question;
 use App\Models\Answer;
+use App\Services\ExamCategoryResolver;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -37,11 +38,17 @@ class SubjectController extends Controller
 
         $subjects = $query->orderBy('name')->paginate(15);
 
-        // Get all exam categories for filter
-        $examCategories = \App\Models\ExamCategory::where('is_active', true)->orderBy('name')->get(['id', 'name', 'slug']);
+        $departments = \App\Models\Department::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $examCategories = \App\Models\ExamCategory::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'flow_type']);
 
         return Inertia::render('admin/subjects/index', [
             'subjects' => $subjects,
+            'departments' => $departments,
             'examCategories' => $examCategories,
             'filters' => $request->only(['search', 'is_active', 'exam_type']),
         ]);
@@ -87,7 +94,7 @@ class SubjectController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(Request $request, ExamCategoryResolver $resolver)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:subjects,name',
@@ -98,11 +105,13 @@ class SubjectController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        // Require department_id if exam_types includes DLI or UNILAG
-        if (in_array('DLI', $validated['exam_types']) || in_array('UNILAG', $validated['exam_types'])) {
+        $validated['exam_types'] = $resolver->normalizeToSlugs($validated['exam_types']);
+        $validated['is_active'] = $validated['is_active'] ?? true;
+
+        if ($resolver->requiresDepartment($validated['exam_types'])) {
             if (empty($validated['department_id'])) {
                 return redirect()->back()
-                    ->withErrors(['department_id' => 'Department is required for DLI/Unilag subjects.'])
+                    ->withErrors(['department_id' => 'Department is required for departmental exam categories.'])
                     ->withInput();
             }
         }
@@ -136,7 +145,7 @@ class SubjectController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Subject $subject)
+    public function update(Request $request, Subject $subject, ExamCategoryResolver $resolver)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:subjects,name,' . $subject->id,
@@ -147,11 +156,12 @@ class SubjectController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        // Require department_id if exam_types includes DLI or UNILAG
-        if (in_array('DLI', $validated['exam_types']) || in_array('UNILAG', $validated['exam_types'])) {
+        $validated['exam_types'] = $resolver->normalizeToSlugs($validated['exam_types']);
+
+        if ($resolver->requiresDepartment($validated['exam_types'])) {
             if (empty($validated['department_id'])) {
                 return redirect()->back()
-                    ->withErrors(['department_id' => 'Department is required for DLI/Unilag subjects.'])
+                    ->withErrors(['department_id' => 'Department is required for departmental exam categories.'])
                     ->withInput();
             }
         }
@@ -321,7 +331,7 @@ class SubjectController extends Controller
     /**
      * Handle bulk upload of questions from CSV, XLSX, or DOCX.
      */
-    public function bulkUpload(Request $request, Subject $subject)
+    public function bulkUpload(Request $request, Subject $subject, ExamCategoryResolver $resolver)
     {
         $request->validate([
             'file' => 'required|file|mimes:csv,txt,xlsx,xls,docx|max:10240', // 10MB max
@@ -430,9 +440,8 @@ class SubjectController extends Controller
                 $examTypes = array_map('strtoupper', $examTypes);
             }
             
-            // Always use the selected exam type from the form
-            // This ensures consistency - when user selects JAMB only, all questions get JAMB only
-            $examTypes = [$selectedExamType];
+            // Always use the selected exam type from the form (normalized to category slug)
+            $examTypes = $resolver->normalizeToSlugs([$selectedExamType]);
 
             // Get explanation column (depends on question type)
             if ($questionType === 'multiple_choice') {
@@ -557,6 +566,8 @@ class SubjectController extends Controller
                         ]);
                     }
                 }
+
+                $resolver->syncQuestionCategories($question, $examTypes);
 
                 $imported++;
                 \Log::info("Bulk upload: Successfully imported question", [

@@ -42,7 +42,6 @@ class ExamCategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:exam_categories',
-            'icon_name' => 'nullable|string|max:255',
             'flow_type' => 'required|string|max:255',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
@@ -67,7 +66,6 @@ class ExamCategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:exam_categories,name,' . $examCategory->id,
-            'icon_name' => 'nullable|string|max:255',
             'flow_type' => 'required|string|max:255',
             'description' => 'nullable|string',
             'is_active' => 'boolean',

@@ -12,7 +12,6 @@ interface ExamCategory {
     id: number;
     name: string;
     slug: string;
-    icon_name: string | null;
     flow_type: string;
     description: string | null;
     is_active: boolean;
@@ -26,7 +25,6 @@ export default function EditExamCategory({ examCategory }: Props) {
     const { data, setData, patch, processing, errors } = useForm({
         name: examCategory.name,
         slug: examCategory.slug,
-        icon_name: examCategory.icon_name || '',
         flow_type: examCategory.flow_type || 'standard',
         description: examCategory.description || '',
         is_active: examCategory.is_active,
@@ -69,19 +67,6 @@ export default function EditExamCategory({ examCategory }: Props) {
                                 />
                                 {errors.name && (
                                     <p className="text-sm text-red-500">{errors.name}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="icon_name">Icon Name (MaterialIcons)</Label>
-                                <Input
-                                    id="icon_name"
-                                    value={data.icon_name}
-                                    onChange={(e) => setData('icon_name', e.target.value)}
-                                    placeholder="e.g., menu-book, account-balance"
-                                />
-                                {errors.icon_name && (
-                                    <p className="text-sm text-red-500">{errors.icon_name}</p>
                                 )}
                             </div>
 

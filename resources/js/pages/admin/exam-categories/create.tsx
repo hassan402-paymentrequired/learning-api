@@ -6,13 +6,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
+import { type BreadcrumbItem } from '@/types';
+import admin from '@/routes/admin';
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Exam Categories', href: admin.examCategories.index().url },
+    { title: 'Create Exam Category', href: '#' },
+];
 
 export default function CreateExamCategory() {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         slug: '',
-        icon_name: '',
         flow_type: 'standard',
         description: '',
         is_active: true,
@@ -24,7 +30,7 @@ export default function CreateExamCategory() {
     };
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create ExamCategory" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
@@ -54,19 +60,6 @@ export default function CreateExamCategory() {
                                 />
                                 {errors.name && (
                                     <p className="text-sm text-red-500">{errors.name}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="icon_name">Icon Name (MaterialIcons)</Label>
-                                <Input
-                                    id="icon_name"
-                                    value={data.icon_name}
-                                    onChange={(e) => setData('icon_name', e.target.value)}
-                                    placeholder="e.g., menu-book, account-balance"
-                                />
-                                {errors.icon_name && (
-                                    <p className="text-sm text-red-500">{errors.icon_name}</p>
                                 )}
                             </div>
 

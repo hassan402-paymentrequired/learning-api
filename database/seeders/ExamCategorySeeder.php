@@ -15,17 +15,15 @@ class ExamCategorySeeder extends Seeder
         $categories = [
             [
                 'name' => 'JAMB Practice',
-                'slug' => 'JAMB',
+                'slug' => 'jamb',
                 'description' => 'Practice with past questions and mock exams',
-                'icon_name' => 'school',
                 'flow_type' => 'standard',
                 'is_active' => true,
             ],
             [
-                'name' => 'DLI Practice',
-                'slug' => 'DLI',
+                'name' => 'UNILAG DLI',
+                'slug' => 'unilag-dli',
                 'description' => 'Practice with DLI-specific questions',
-                'icon_name' => 'menu-book',
                 'flow_type' => 'departmental',
                 'is_active' => true,
             ],

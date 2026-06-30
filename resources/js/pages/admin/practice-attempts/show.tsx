@@ -6,6 +6,11 @@ import { Link } from '@inertiajs/react';
 import admin from '@/routes/admin';
 import { Button } from '@/components/ui/button';
 
+interface AttemptSubject {
+    subject: string;
+    question_count?: number;
+}
+
 interface Attempt {
     id: number;
     user: {
@@ -17,7 +22,8 @@ interface Attempt {
         id: number;
         title: string;
         exam_type: string;
-    };
+    } | null;
+    subjects?: AttemptSubject[] | null;
     status: string;
     score: number;
     correct_answers: number;
@@ -26,6 +32,26 @@ interface Attempt {
     completed_at: string | null;
     time_spent: number | null;
     percentage?: number;
+}
+
+function getAttemptTitle(attempt: Attempt): string {
+    if (attempt.exam?.title) {
+        return attempt.exam.title;
+    }
+
+    const subjectNames = (attempt.subjects ?? [])
+        .map((entry) => entry.subject)
+        .filter(Boolean);
+
+    if (subjectNames.length > 0) {
+        return `Practice: ${subjectNames.join(', ')}`;
+    }
+
+    return 'Practice Session';
+}
+
+function getAttemptType(attempt: Attempt): string {
+    return attempt.exam?.exam_type ?? 'Practice';
 }
 
 interface Result {
@@ -67,7 +93,7 @@ export default function ShowPracticeAttempt({ attempt, results }: Props) {
 
     return (
         <AppLayout>
-            <Head title={`Practice Attempt: ${attempt.exam.title}`} />
+            <Head title={`Practice Attempt: ${getAttemptTitle(attempt)}`} />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -109,8 +135,8 @@ export default function ShowPracticeAttempt({ attempt, results }: Props) {
                             <div className="flex items-center gap-2">
                                 <BookOpen className="h-4 w-4 text-muted-foreground" />
                                 <div>
-                                    <p className="font-medium">{attempt.exam.title}</p>
-                                    <p className="text-sm text-muted-foreground">{attempt.exam.exam_type}</p>
+                                    <p className="font-medium">{getAttemptTitle(attempt)}</p>
+                                    <p className="text-sm text-muted-foreground">{getAttemptType(attempt)}</p>
                                 </div>
                             </div>
                         </CardContent>

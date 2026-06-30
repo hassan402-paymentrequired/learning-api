@@ -10,6 +10,11 @@ import { Link, router, Head } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
+interface AttemptSubject {
+    subject: string;
+    question_count?: number;
+}
+
 interface Attempt {
     id: number;
     user: {
@@ -21,13 +26,34 @@ interface Attempt {
         id: number;
         title: string;
         exam_type: string;
-    };
+    } | null;
+    subjects?: AttemptSubject[] | null;
     status: string;
     score: number;
     correct_answers: number;
     total_questions: number;
     started_at: string;
     completed_at: string | null;
+}
+
+function getAttemptTitle(attempt: Attempt): string {
+    if (attempt.exam?.title) {
+        return attempt.exam.title;
+    }
+
+    const subjectNames = (attempt.subjects ?? [])
+        .map((entry) => entry.subject)
+        .filter(Boolean);
+
+    if (subjectNames.length > 0) {
+        return `Practice: ${subjectNames.join(', ')}`;
+    }
+
+    return 'Practice Session';
+}
+
+function getAttemptType(attempt: Attempt): string {
+    return attempt.exam?.exam_type ?? 'Practice';
 }
 
 interface Props {
@@ -214,9 +240,9 @@ export default function PracticeAttemptsIndex({ attempts, filters }: Props) {
                                             onCheckedChange={() => handleSelectAttempt(attempt.id)}
                                         />
                                         <div className="flex-1">
-                                            <CardTitle className="text-lg">{attempt.exam.title}</CardTitle>
+                                            <CardTitle className="text-lg">{getAttemptTitle(attempt)}</CardTitle>
                                             <CardDescription className="mt-1">
-                                                {attempt.exam.exam_type}
+                                                {getAttemptType(attempt)}
                                                 {attempt.status === 'completed' && (
                                                     <> • {calculatePercentage(attempt.correct_answers, attempt.total_questions)}%</>
                                                 )}
