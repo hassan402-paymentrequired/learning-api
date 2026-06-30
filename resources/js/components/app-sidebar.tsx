@@ -29,7 +29,7 @@ const mainNavItems: NavItem[] = [
         icon: Users,
     },
     {
-        title: 'Exams',
+        title: 'Past Questions',
         href: admin.exams.index().url,
         icon: FileText,
     },

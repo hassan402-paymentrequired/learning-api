@@ -67,6 +67,33 @@ class DepartmentController extends Controller
     }
 
     /**
+     * Display courses (subjects) belonging to the department.
+     */
+    public function show(Request $request, Department $department)
+    {
+        $query = $department->subjects()->withCount('questions');
+
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        if ($request->filled('is_active') && $request->is_active !== 'all') {
+            $query->where('is_active', $request->is_active === 'true');
+        }
+
+        $subjects = $query->orderBy('name')->paginate(15)->withQueryString();
+
+        return Inertia::render('admin/departments/show', [
+            'department' => $department->loadCount('subjects'),
+            'subjects' => $subjects,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'is_active' => $request->input('is_active', 'all'),
+            ],
+        ]);
+    }
+
+    /**
      * Show the form for editing the specified resource.
      */
     public function edit(Department $department)

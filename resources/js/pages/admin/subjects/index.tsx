@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { toast } from 'sonner';
+import { type BreadcrumbItem } from '@/types';
 
 interface Subject {
     id: number;
@@ -50,16 +51,31 @@ interface Props {
     departments: Department[];
     examCategories: ExamCategory[];
     filters: {
-        search?: string;
-        is_active?: string;
-        exam_type?: string;
+        search: string;
+        is_active: string;
+        exam_type: string;
+    };
+}
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Subjects', href: admin.subjects.index().url },
+];
+
+function subjectFilterParams(filters: Props['filters'], overrides: Partial<Props['filters'] & { page?: number }> = {}) {
+    const search = overrides.search ?? filters.search;
+    const isActive = overrides.is_active ?? filters.is_active;
+    const examType = overrides.exam_type ?? filters.exam_type;
+    const page = overrides.page ?? 1;
+
+    return {
+        search: search || undefined,
+        is_active: isActive !== 'all' ? isActive : undefined,
+        exam_type: examType !== 'all' ? examType : undefined,
+        page: page > 1 ? page : undefined,
     };
 }
 
 export default function SubjectsIndex({ subjects, departments, examCategories, filters }: Props) {
-    const [search, setSearch] = useState(filters.search || '');
-    const [isActive, setIsActive] = useState(filters.is_active || '');
-    const [examType, setExamType] = useState(filters.exam_type || '');
     const [selectedSubjects, setSelectedSubjects] = useState<number[]>([]);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -105,16 +121,28 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
         });
     };
 
-    const handleFilter = () => {
-        router.get(admin.subjects.index().url, {
-            search: search || undefined,
-            is_active: isActive !== 'all' ? isActive : undefined,
-            exam_type: examType !== 'all' ? examType : undefined,
-        }, {
+    const applyFilters = (overrides: Partial<Props['filters'] & { page?: number }> = {}) => {
+        router.get(
+            admin.subjects.index().url,
+            subjectFilterParams(filters, overrides),
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+            },
+        );
+    };
+
+    const clearFilters = () => {
+        router.get(admin.subjects.index().url, {}, {
             preserveState: true,
             preserveScroll: true,
+            replace: true,
         });
     };
+
+    const hasActiveFilters =
+        filters.search !== '' || filters.is_active !== 'all' || filters.exam_type !== 'all';
 
     const handleSelectSubject = (subjectId: number) => {
         if (selectedSubjects.includes(subjectId)) {
@@ -180,7 +208,7 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
     };
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Subjects" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -240,21 +268,34 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
                         <CardDescription>Filter subjects by search, exam type or status</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex flex-col lg:flex-row gap-4">
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                const formData = new FormData(e.currentTarget);
+                                applyFilters({
+                                    search: (formData.get('search') as string) ?? '',
+                                    page: 1,
+                                });
+                            }}
+                            className="flex flex-col lg:flex-row gap-4"
+                        >
                             <div className="flex-1">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input
+                                        name="search"
                                         placeholder="Search subjects..."
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleFilter()}
+                                        defaultValue={filters.search}
+                                        key={`search-${filters.search}`}
                                         className="pl-9"
                                     />
                                 </div>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-2 flex-1 lg:flex-initial">
-                                <Select value={examType || 'all'} onValueChange={setExamType}>
+                                <Select
+                                    value={filters.exam_type}
+                                    onValueChange={(value) => applyFilters({ exam_type: value, page: 1 })}
+                                >
                                     <SelectTrigger className="w-full sm:w-[180px]">
                                         <SelectValue placeholder="All Exam Types" />
                                     </SelectTrigger>
@@ -267,7 +308,10 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <Select value={isActive || 'all'} onValueChange={setIsActive}>
+                                <Select
+                                    value={filters.is_active}
+                                    onValueChange={(value) => applyFilters({ is_active: value, page: 1 })}
+                                >
                                     <SelectTrigger className="w-full sm:w-[180px]">
                                         <SelectValue placeholder="All Statuses" />
                                     </SelectTrigger>
@@ -277,9 +321,19 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
                                         <SelectItem value="false">Inactive</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Button onClick={handleFilter} className="w-full sm:w-auto">Filter</Button>
+                                <Button type="submit" className="w-full sm:w-auto">Search</Button>
+                                {hasActiveFilters && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full sm:w-auto"
+                                        onClick={clearFilters}
+                                    >
+                                        Clear
+                                    </Button>
+                                )}
                             </div>
-                        </div>
+                        </form>
                     </CardContent>
                 </Card>
 
@@ -392,7 +446,7 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
                         <Button
                             variant="outline"
                             disabled={subjects.current_page === 1}
-                            onClick={() => router.get(admin.subjects.index().url, { page: subjects.current_page - 1, ...filters })}
+                            onClick={() => applyFilters({ page: subjects.current_page - 1 })}
                         >
                             Previous
                         </Button>
@@ -402,7 +456,7 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
                         <Button
                             variant="outline"
                             disabled={subjects.current_page === subjects.last_page}
-                            onClick={() => router.get(admin.subjects.index().url, { page: subjects.current_page + 1, ...filters })}
+                            onClick={() => applyFilters({ page: subjects.current_page + 1 })}
                         >
                             Next
                         </Button>

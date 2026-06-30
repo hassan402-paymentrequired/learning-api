@@ -134,17 +134,17 @@ export default function ExamsIndex({ exams, filters }: Props) {
 
     return (
         <AppLayout>
-            <Head title="Exams" />
+            <Head title="Past Questions" />
             <div className="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 overflow-x-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold">Exams</h1>
-                        <p className="text-muted-foreground">Manage practice exams and past questions</p>
+                        <h1 className="text-2xl font-bold">Past Questions</h1>
+                        <p className="text-muted-foreground">Manage past question papers by exam type, subject, and year</p>
                     </div>
                     <Button asChild className="w-full sm:w-auto">
                         <Link href={admin.exams.create().url}>
                             <Plus className="mr-2 h-4 w-4" />
-                            Create Exam
+                            Create Past Question
                         </Link>
                     </Button>
                 </div>

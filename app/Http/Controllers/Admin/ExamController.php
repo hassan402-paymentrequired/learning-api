@@ -4,11 +4,18 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Exam;
+use App\Models\ExamCategory;
+use App\Models\Subject;
+use App\Services\ExamCategoryResolver;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ExamController extends Controller
 {
+    public function __construct(private ExamCategoryResolver $resolver)
+    {
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -39,13 +46,9 @@ class ExamController extends Controller
      */
     public function create()
     {
-        $subjects = \App\Models\Subject::where('is_active', true)
-            ->whereJsonContains('exam_types', 'JAMB')
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
         return Inertia::render('admin/exams/create', [
-            'subjects' => $subjects,
+            'subjects' => $this->pastQuestionSubjects(),
+            'examCategories' => $this->pastQuestionCategories(),
         ]);
     }
 
@@ -56,39 +59,35 @@ class ExamController extends Controller
     {
         $validated = $request->validate([
             'title' => 'nullable|string|max:255',
+            'exam_category_id' => 'required|exists:exam_categories,id',
             'subject_id' => 'required|exists:subjects,id',
             'year' => 'required|integer|min:2000|max:' . (date('Y') + 1),
             'is_active' => 'boolean',
         ]);
 
-        // Get subject name from subject_id
-        $subject = \App\Models\Subject::findOrFail($validated['subject_id']);
-        
-        // Check if exam already exists for this subject and year
-        $existingExam = Exam::where('exam_type', 'JAMB')
-            ->where('subject', $subject->name)
-            ->where('year', $validated['year'])
-            ->first();
+        $category = ExamCategory::findOrFail($validated['exam_category_id']);
+        $subject = Subject::findOrFail($validated['subject_id']);
 
-        if ($existingExam) {
+        if ($this->pastQuestionExists($category, $subject->name, $validated['year'])) {
             return back()->withErrors([
-                'year' => 'A past question exam already exists for ' . $subject->name . ' in ' . $validated['year'] . '.',
+                'year' => 'A past question already exists for ' . $subject->name . ' in ' . $validated['year'] . ' under ' . $category->name . '.',
             ]);
         }
 
-        // Auto-generate title if empty
-        $title = $validated['title'] ?: "JAMB {$subject->name} {$validated['year']}";
+        $title = $validated['title'] ?: "{$category->name} {$subject->name} {$validated['year']}";
 
         $exam = Exam::create([
             'title' => $title,
-            'exam_type' => 'JAMB', 
+            'exam_type' => $category->slug,
             'subject' => $subject->name,
             'year' => $validated['year'],
             'is_active' => $validated['is_active'] ?? true,
         ]);
 
+        $this->resolver->syncExamCategories($exam);
+
         return redirect()->route('admin.exams.show', $exam)
-            ->with('success-toast', 'Exam created successfully.');
+            ->with('success-toast', 'Past question created successfully.');
     }
 
     /**
@@ -117,21 +116,19 @@ class ExamController extends Controller
      */
     public function edit(Exam $exam)
     {
-        $subjects = \App\Models\Subject::where('is_active', true)
-            ->whereJsonContains('exam_types', 'JAMB')
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        $currentSubject = $exam->subject
+            ? Subject::where('name', $exam->subject)->first()
+            : null;
 
-        // Find the subject ID for the current exam's subject
-        $currentSubject = null;
-        if ($exam->subject) {
-            $currentSubject = \App\Models\Subject::where('name', $exam->subject)->first();
-        }
+        $currentCategory = $exam->examCategories()->first()
+            ?? $this->resolver->resolve($exam->exam_type);
 
         return Inertia::render('admin/exams/edit', [
             'exam' => $exam,
-            'subjects' => $subjects,
+            'subjects' => $this->pastQuestionSubjects($currentSubject?->id),
+            'examCategories' => $this->pastQuestionCategories(),
             'current_subject_id' => $currentSubject?->id,
+            'current_exam_category_id' => $currentCategory?->id,
         ]);
     }
 
@@ -142,40 +139,35 @@ class ExamController extends Controller
     {
         $validated = $request->validate([
             'title' => 'nullable|string|max:255',
+            'exam_category_id' => 'required|exists:exam_categories,id',
             'subject_id' => 'required|exists:subjects,id',
             'year' => 'required|integer|min:2000|max:' . (date('Y') + 1),
             'is_active' => 'boolean',
         ]);
 
-        // Get subject name from subject_id
-        $subject = \App\Models\Subject::findOrFail($validated['subject_id']);
-        
-        // Check if another exam already exists for this subject and year (excluding current exam)
-        $existingExam = Exam::where('exam_type', 'JAMB')
-            ->where('subject', $subject->name)
-            ->where('year', $validated['year'])
-            ->where('id', '!=', $exam->id)
-            ->first();
+        $category = ExamCategory::findOrFail($validated['exam_category_id']);
+        $subject = Subject::findOrFail($validated['subject_id']);
 
-        if ($existingExam) {
+        if ($this->pastQuestionExists($category, $subject->name, $validated['year'], $exam->id)) {
             return back()->withErrors([
-                'year' => 'A past question exam already exists for ' . $subject->name . ' in ' . $validated['year'] . '.',
+                'year' => 'A past question already exists for ' . $subject->name . ' in ' . $validated['year'] . ' under ' . $category->name . '.',
             ]);
         }
 
-        // Auto-generate title if empty
-        $title = $validated['title'] ?: "JAMB {$subject->name} {$validated['year']}";
+        $title = $validated['title'] ?: "{$category->name} {$subject->name} {$validated['year']}";
 
         $exam->update([
             'title' => $title,
-            'exam_type' => 'JAMB', // Always JAMB for past questions
+            'exam_type' => $category->slug,
             'subject' => $subject->name,
             'year' => $validated['year'],
             'is_active' => $validated['is_active'] ?? $exam->is_active,
         ]);
 
+        $exam->examCategories()->sync([$category->id]);
+
         return redirect()->route('admin.exams.show', $exam)
-            ->with('success', 'Exam updated successfully.');
+            ->with('success', 'Past question updated successfully.');
     }
 
     /**
@@ -261,5 +253,71 @@ class ExamController extends Controller
 
         return redirect()->route('admin.exams.index')
             ->with('success', $message);
+    }
+
+    private function pastQuestionSubjects(?int $includeSubjectId = null)
+    {
+        $tokens = [];
+        foreach ($this->pastQuestionCategories() as $category) {
+            $tokens = array_merge($tokens, $this->resolver->matchTokens($category->slug));
+        }
+        $tokens = array_values(array_unique(array_filter($tokens)));
+
+        return Subject::where('is_active', true)
+            ->where(function ($query) use ($tokens, $includeSubjectId) {
+                if (!empty($tokens)) {
+                    $query->where(function ($inner) use ($tokens) {
+                        foreach ($tokens as $token) {
+                            $inner->orWhereJsonContains('exam_types', $token);
+                        }
+                    });
+                } else {
+                    $query->whereRaw('0 = 1');
+                }
+
+                if ($includeSubjectId) {
+                    $query->orWhere('id', $includeSubjectId);
+                }
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    private function pastQuestionCategories()
+    {
+        return ExamCategory::where('is_active', true)
+            ->where('flow_type', 'standard')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+    }
+
+    private function pastQuestionExists(
+        ExamCategory $category,
+        string $subjectName,
+        int $year,
+        ?int $excludeExamId = null
+    ): bool {
+        $searchValues = array_unique(array_filter([
+            strtolower($category->slug),
+            strtoupper($category->slug),
+            strtoupper(str_replace('-', ' ', $category->slug)),
+        ]));
+
+        $query = Exam::where('subject', $subjectName)
+            ->where('year', $year)
+            ->where(function ($q) use ($searchValues, $category) {
+                foreach ($searchValues as $value) {
+                    $q->orWhereRaw('LOWER(exam_type) = ?', [strtolower($value)]);
+                }
+                $q->orWhereHas('examCategories', function ($cq) use ($category) {
+                    $cq->where('exam_categories.id', $category->id);
+                });
+            });
+
+        if ($excludeExamId) {
+            $query->where('id', '!=', $excludeExamId);
+        }
+
+        return $query->exists();
     }
 }

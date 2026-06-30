@@ -3,11 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import InputError from '@/components/input-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
-import { Form, Head, useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
 import admin from '@/routes/admin';
 
@@ -24,20 +23,35 @@ interface Subject {
     name: string;
 }
 
+interface ExamCategory {
+    id: number;
+    name: string;
+    slug: string;
+}
+
 interface Props {
     exam: Exam;
     subjects: Subject[];
+    examCategories: ExamCategory[];
     current_subject_id?: number | null;
+    current_exam_category_id?: number | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Exams', href: admin.exams.index().url },
-    { title: 'Edit Exam', href: '#' },
+    { title: 'Past Questions', href: admin.exams.index().url },
+    { title: 'Edit', href: '#' },
 ];
 
-export default function EditExam({ exam, subjects, current_subject_id }: Props) {
+export default function EditExam({
+    exam,
+    subjects,
+    examCategories,
+    current_subject_id,
+    current_exam_category_id,
+}: Props) {
     const { data, setData, patch, processing, errors } = useForm({
         title: exam.title,
+        exam_category_id: current_exam_category_id?.toString() ?? examCategories[0]?.id.toString() ?? '',
         subject_id: current_subject_id?.toString() || '',
         year: exam.year,
         is_active: exam.is_active,
@@ -50,91 +64,77 @@ export default function EditExam({ exam, subjects, current_subject_id }: Props) 
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit Exam" />
+            <Head title="Edit Past Question" />
             <div className="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 overflow-x-hidden">
                 <div>
-                    <h1 className="text-2xl font-bold">Edit Exam</h1>
-                    <p className="text-muted-foreground">Update exam information</p>
+                    <h1 className="text-2xl font-bold">Edit Past Question</h1>
+                    <p className="text-muted-foreground">Update past question details</p>
                 </div>
-
-                <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10">
-                    <CardHeader>
-                        <CardTitle className="text-sm">Note</CardTitle>
-                        <CardDescription className="text-xs">
-                            Exams are now only for past questions. Students select their own duration when taking exams.
-                        </CardDescription>
-                    </CardHeader>
-                </Card>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Exam Details</CardTitle>
-                        <CardDescription>Update the information for this exam</CardDescription>
+                        <CardTitle>Past Question Details</CardTitle>
+                        <CardDescription>Update the exam type, subject, and year for this paper</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Form onSubmit={submit} className="space-y-6">
+                        <form onSubmit={submit} className="space-y-6">
                             <div className="grid gap-2">
                                 <Label htmlFor="title">Title</Label>
                                 <Input
                                     id="title"
                                     value={data.title}
                                     onChange={(e) => setData('title', e.target.value)}
-                                    placeholder="e.g., JAMB Mathematics 2024 (optional - will auto-generate)"
+                                    placeholder="Optional — auto-generated from exam type, subject, and year"
                                 />
                                 <InputError message={errors.title} />
-                                <p className="text-xs text-muted-foreground">
-                                    Title will be auto-generated if left empty based on subject and year
-                                </p>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea
-                                    id="description"
-                                    value={data.description}
-                                    onChange={(e) => setData('description', e.target.value)}
-                                    rows={3}
-                                />
-                                <InputError message={errors.description} />
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="exam_type">Exam Type *</Label>
+                                    <Label htmlFor="exam_category_id">Exam Type *</Label>
                                     <Select
-                                        value={data.exam_type}
-                                        onValueChange={(value: 'JAMB' | 'UNILAG' | 'DLI' | 'GENERAL') => setData('exam_type', value)}
+                                        value={data.exam_category_id}
+                                        onValueChange={(value) => setData('exam_category_id', value)}
+                                        required
                                     >
                                         <SelectTrigger>
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select exam type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="JAMB">JAMB</SelectItem>
-                                            <SelectItem value="UNILAG">UNILAG</SelectItem>
-                                            <SelectItem value="DLI">DLI (Distance Learning Institute)</SelectItem>
-                                            <SelectItem value="GENERAL">GENERAL</SelectItem>
+                                            {examCategories.map((category) => (
+                                                <SelectItem key={category.id} value={category.id.toString()}>
+                                                    {category.name}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
-                                    <InputError message={errors.exam_type} />
+                                    <InputError message={errors.exam_category_id} />
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="subject">Subject</Label>
-                                    <Input
-                                        id="subject"
-                                        value={data.subject}
-                                        onChange={(e) => setData('subject', e.target.value)}
-                                        placeholder="e.g., Mathematics"
-                                    />
-                                    <InputError message={errors.subject} />
-                                    <p className="text-xs text-muted-foreground">
-                                        Optional: Subject/course for this past question exam
-                                    </p>
+                                    <Label htmlFor="subject_id">Subject *</Label>
+                                    <Select
+                                        value={data.subject_id}
+                                        onValueChange={(value) => setData('subject_id', value)}
+                                        required
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a subject" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {subjects.map((subject) => (
+                                                <SelectItem key={subject.id} value={subject.id.toString()}>
+                                                    {subject.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={errors.subject_id} />
                                 </div>
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="year">Year</Label>
+                            <div className="grid gap-2 max-w-xs">
+                                <Label htmlFor="year">Year *</Label>
                                 <Input
                                     id="year"
                                     type="number"
@@ -143,11 +143,9 @@ export default function EditExam({ exam, subjects, current_subject_id }: Props) 
                                     value={data.year || ''}
                                     onChange={(e) => setData('year', e.target.value ? parseInt(e.target.value) : null)}
                                     placeholder="e.g., 2024"
+                                    required
                                 />
                                 <InputError message={errors.year} />
-                                <p className="text-xs text-muted-foreground">
-                                    Year for this past question exam
-                                </p>
                             </div>
 
                             <div className="flex items-center space-x-2">
@@ -163,7 +161,7 @@ export default function EditExam({ exam, subjects, current_subject_id }: Props) 
 
                             <div className="flex flex-col-reverse sm:flex-row flex-wrap gap-2">
                                 <Button type="submit" disabled={processing} className="w-full sm:w-auto">
-                                    {processing ? 'Updating...' : 'Update Exam'}
+                                    {processing ? 'Updating...' : 'Update Past Question'}
                                 </Button>
                                 <Button
                                     type="button"
@@ -174,7 +172,7 @@ export default function EditExam({ exam, subjects, current_subject_id }: Props) 
                                     <a href={admin.exams.show(exam.id).url}>Cancel</a>
                                 </Button>
                             </div>
-                        </Form>
+                        </form>
                     </CardContent>
                 </Card>
             </div>

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, router, useForm } from '@inertiajs/react';
-import { Plus, Search, Power, PowerOff, Trash2, Edit, MoreVertical, Save } from 'lucide-react';
+import { Plus, Search, Power, PowerOff, Trash2, Edit, MoreVertical, Save, Eye } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 import { Link } from '@inertiajs/react';
@@ -171,7 +171,13 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
                                     <div className="flex-1">
                                         <CardTitle className="text-lg">{department.name}</CardTitle>
                                         <CardDescription className="mt-1">
-                                            {department.subjects_count} {department.subjects_count === 1 ? 'subject' : 'subjects'}
+                                            <Link
+                                                href={`/admin/departments/${department.id}`}
+                                                className="hover:text-primary hover:underline"
+                                            >
+                                                {department.subjects_count}{' '}
+                                                {department.subjects_count === 1 ? 'course' : 'courses'}
+                                            </Link>
                                         </CardDescription>
                                     </div>
                                     {department.is_active ? (
@@ -195,6 +201,12 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
                             <CardContent className="pt-0">
                                 <div className="flex items-center justify-between">
                                     <div className="flex gap-2">
+                                        <Button variant="default" size="sm" asChild>
+                                            <Link href={`/admin/departments/${department.id}`}>
+                                                <Eye className="mr-2 h-4 w-4" />
+                                                View Courses
+                                            </Link>
+                                        </Button>
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -223,6 +235,12 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
+                                            <DropdownMenuItem asChild>
+                                                <Link href={`/admin/departments/${department.id}`}>
+                                                    <Eye className="mr-2 h-4 w-4" />
+                                                    View Courses
+                                                </Link>
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem asChild>
                                                 <Link href={`/admin/departments/${department.id}/edit`}>
                                                     <Edit className="mr-2 h-4 w-4" />

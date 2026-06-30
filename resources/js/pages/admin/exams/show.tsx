@@ -84,8 +84,8 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Exams', href: admin.exams.index().url },
-    { title: 'Exam Details', href: '#' },
+    { title: 'Past Questions', href: admin.exams.index().url },
+    { title: 'Details', href: '#' },
 ];
 
 export default function ShowExam({ exam, targetExams = [], import_errors = [] }: Props) {

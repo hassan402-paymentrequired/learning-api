@@ -14,6 +14,10 @@ use PhpOffice\PhpWord\IOFactory as WordIOFactory;
 
 class SubjectController extends Controller
 {
+    public function __construct(private ExamCategoryResolver $resolver)
+    {
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -21,22 +25,31 @@ class SubjectController extends Controller
     {
         $query = Subject::withCount('questions');
 
-        // Search
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $query->where('name', 'like', '%' . $request->search . '%');
         }
 
-        // Filter by active status
-        if ($request->has('is_active')) {
+        if ($request->filled('is_active') && $request->is_active !== 'all') {
             $query->where('is_active', $request->is_active === 'true');
         }
 
-        // Filter by exam type (using exam_types JSON column)
-        if ($request->has('exam_type') && $request->exam_type !== 'all') {
-            $query->whereJsonContains('exam_types', $request->exam_type);
+        if ($request->filled('exam_type') && $request->exam_type !== 'all') {
+            $tokens = $this->resolver->matchTokens($request->exam_type);
+
+            $query->where(function ($q) use ($tokens) {
+                if (empty($tokens)) {
+                    $q->whereRaw('0 = 1');
+
+                    return;
+                }
+
+                foreach ($tokens as $token) {
+                    $q->orWhereJsonContains('exam_types', $token);
+                }
+            });
         }
 
-        $subjects = $query->orderBy('name')->paginate(15);
+        $subjects = $query->orderBy('name')->paginate(15)->withQueryString();
 
         $departments = \App\Models\Department::where('is_active', true)
             ->orderBy('name')
@@ -50,7 +63,11 @@ class SubjectController extends Controller
             'subjects' => $subjects,
             'departments' => $departments,
             'examCategories' => $examCategories,
-            'filters' => $request->only(['search', 'is_active', 'exam_type']),
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'is_active' => $request->input('is_active', 'all'),
+                'exam_type' => $request->input('exam_type', 'all'),
+            ],
         ]);
     }
 
