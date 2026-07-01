@@ -149,30 +149,18 @@ class User extends Authenticatable implements JWTSubject
 
     /**
      * Check if user has active subscription valid for this client (by Device ID).
-     * Subscription is only valid from the device that was used when subscribing.
-     * subscription_device_id stores the device ID. If not set, returns true for backward compatibility.
+     * Subscription is only valid from the device it was bound to at purchase/activation.
      */
     public function hasActiveSubscriptionForDevice(?string $deviceId): bool
     {
         if (empty($deviceId)) {
-            // If they don't provide a device ID, check if they have ANY active subscription 
-            // that is unbound (device_id is null)
-            return $this->subscriptions()
-                ->where('status', 'active')
-                ->where('expires_at', '>', now())
-                ->whereNull('device_id')
-                ->exists();
+            return false;
         }
 
-        // They provided a device ID. Check if they have an active sub bound to this ID
-        // OR an active sub that is completely unbound (we can bind it later in the controller cache).
         return $this->subscriptions()
             ->where('status', 'active')
             ->where('expires_at', '>', now())
-            ->where(function ($query) use ($deviceId) {
-                $query->where('device_id', $deviceId)
-                      ->orWhereNull('device_id');
-            })
+            ->where('device_id', $deviceId)
             ->exists();
     }
 
@@ -187,10 +175,7 @@ class User extends Authenticatable implements JWTSubject
             ->where('expires_at', '>', now());
 
         if (!empty($deviceId)) {
-            $query->where(function ($q) use ($deviceId) {
-                $q->where('device_id', $deviceId)
-                  ->orWhereNull('device_id');
-            });
+            $query->where('device_id', $deviceId);
         }
 
         return $query->latest('expires_at')->first();

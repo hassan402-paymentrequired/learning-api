@@ -14,6 +14,39 @@ use Illuminate\Support\Facades\Log;
 class SubscriptionController extends Controller
 {
     /**
+     * Resolve the device ID to bind when activating a subscription.
+     * Prefers the device stored at payment initialization over the request header.
+     */
+    private function resolveDeviceIdForSubscription(Subscription $subscription, ?string $headerDeviceId): ?string
+    {
+        if (!empty($subscription->device_id)) {
+            return $subscription->device_id;
+        }
+
+        return !empty($headerDeviceId) ? $headerDeviceId : null;
+    }
+
+    /**
+     * Build subscription update payload for activation, binding the purchasing device.
+     */
+    private function buildActivationPayload(Subscription $subscription, ?string $headerDeviceId): array
+    {
+        $payload = [
+            'status' => 'active',
+            'starts_at' => now(),
+            'expires_at' => now()->addYear(),
+            'type' => $subscription->type ?? 'paystack',
+        ];
+
+        $deviceId = $this->resolveDeviceIdForSubscription($subscription, $headerDeviceId);
+        if ($deviceId) {
+            $payload['device_id'] = $deviceId;
+        }
+
+        return $payload;
+    }
+
+    /**
      * Get available subscription plans.
      */
     public function plans(Request $request)
@@ -56,6 +89,14 @@ class SubscriptionController extends Controller
 
         $user = auth()->user();
         $plan = SubscriptionPlan::findOrFail($request->plan_id);
+        $deviceId = $request->header('X-Device-Id');
+
+        if (empty($deviceId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Device ID is required to subscribe.',
+            ], 400);
+        }
 
         // Check if plan is active
         if (!$plan->is_active) {
@@ -185,7 +226,7 @@ class SubscriptionController extends Controller
 
         $paymentData = $paymentResponse->json('data');
 
-        // Create pending subscription record
+        // Create pending subscription record, bound to the device initiating payment
         $subscription = Subscription::create([
             'user_id' => $user->id,
             'subscription_plan_id' => $plan->id,
@@ -194,6 +235,7 @@ class SubscriptionController extends Controller
             'original_amount' => $originalAmount,
             'discount_amount' => $discountAmount,
             'status' => 'pending',
+            'device_id' => $deviceId,
         ]);
 
         // Generate callback and cancel URLs for frontend
@@ -265,18 +307,9 @@ class SubscriptionController extends Controller
         if ($subscription->status !== 'active') {
             DB::transaction(function () use ($subscription, $transactionData) {
                 $user = $subscription->user;
-                $plan = $subscription->plan;
 
-                // Calculate expiration date (1 year from now)
-                $expiresAt = now()->addYear();
-
-                // Update subscription
-                $subscription->update([
-                    'status' => 'active',
-                    'starts_at' => now(),
-                    'expires_at' => $expiresAt,
-                    'type' => 'paystack',
-                ]);
+                // Update subscription (device_id was captured at payment initialization)
+                $subscription->update($this->buildActivationPayload($subscription, null));
 
                 // Process referral rewards: referrer gets 500 credit when referred user subscribes
                 $referral = \App\Models\Referral::where('referred_id', $user->id)
@@ -353,41 +386,39 @@ class SubscriptionController extends Controller
         }
 
         // Payment successful - activate subscription
-        DB::transaction(function () use ($subscription, $transactionData) {
-            $user = $subscription->user;
-            $plan = $subscription->plan;
+        $deviceId = $request->header('X-Device-Id');
 
-            // Calculate expiration date (1 year from now)
-            $expiresAt = now()->addYear();
+        if ($subscription->status !== 'active') {
+            DB::transaction(function () use ($subscription, $transactionData, $deviceId) {
+                $user = $subscription->user;
 
-            // Update subscription
-            $subscription->update([
-                'status' => 'active',
-                'starts_at' => now(),
-                'expires_at' => $expiresAt,
-                'type' => 'paystack',
-            ]);
+                // Update subscription and bind to the purchasing device
+                $subscription->update($this->buildActivationPayload($subscription, $deviceId));
 
-            // Process referral rewards: referrer gets 500 credit when referred user subscribes
-            $referral = \App\Models\Referral::where('referred_id', $user->id)
-                ->where('status', 'pending')
-                ->first();
+                // Process referral rewards: referrer gets 500 credit when referred user subscribes
+                $referral = \App\Models\Referral::where('referred_id', $user->id)
+                    ->where('status', 'pending')
+                    ->first();
 
-            if ($referral) {
-                $referral->update([
-                    'subscription_id' => $subscription->id,
-                    'referrer_reward_amount' => 500,
-                    'status' => 'rewarded',
-                    'rewarded_at' => now(),
-                ]);
-                Log::info('Referral rewarded (verifyPayment): referrer_id=' . $referral->referrer_id . ', referred_id=' . $user->id . ', subscription_id=' . $subscription->id);
-            }
+                if ($referral) {
+                    $referral->update([
+                        'subscription_id' => $subscription->id,
+                        'referrer_reward_amount' => 500,
+                        'status' => 'rewarded',
+                        'rewarded_at' => now(),
+                    ]);
+                    Log::info('Referral rewarded (verifyPayment): referrer_id=' . $referral->referrer_id . ', referred_id=' . $user->id . ', subscription_id=' . $subscription->id);
+                }
 
-            // Generate referral code for user if they don't have one
-            if (!$user->referral_code) {
-                $user->generateReferralCode();
-            }
-        });
+                // Generate referral code for user if they don't have one
+                if (!$user->referral_code) {
+                    $user->generateReferralCode();
+                }
+            });
+        } elseif (empty($subscription->device_id) && !empty($deviceId)) {
+            // Legacy subscriptions activated before device binding was enforced
+            $subscription->update(['device_id' => $deviceId]);
+        }
 
         return response()->json([
             'success' => true,
@@ -469,33 +500,29 @@ class SubscriptionController extends Controller
         $user = auth()->user();
         $deviceId = $request->header('X-Device-Id');
 
-        // If user has an unbound active subscription, they might need to register it.
-        // But for seamless experience, if they are active, we show the status.
-        $activeSubscription = $user->activeSubscription($deviceId);
-        
-        // Auto-bind device ID if the user has an active unbound subscription
-        if (!$activeSubscription && !empty($deviceId)) {
-            $unbound = $user->subscriptions()
-                ->where('status', 'active')
-                ->where('expires_at', '>', now())
-                ->whereNull('device_id')
-                ->orderBy('expires_at', 'desc')
-                ->first();
-            
-            if ($unbound) {
-                $unbound->update(['device_id' => $deviceId]);
-                $activeSubscription = $unbound;
-            }
-        }
+        $activeSubscription = !empty($deviceId)
+            ? $user->activeSubscription($deviceId)
+            : null;
 
         $hasActiveForDevice = $activeSubscription !== null;
 
         // Check if there are active subscriptions on OTHER devices
-        $otherActiveCount = $user->subscriptions()
+        $otherActiveQuery = $user->subscriptions()
             ->where('status', 'active')
             ->where('expires_at', '>', now())
-            ->whereNotNull('device_id')
-            ->where('device_id', '!=', $deviceId)
+            ->whereNotNull('device_id');
+
+        if (!empty($deviceId)) {
+            $otherActiveQuery->where('device_id', '!=', $deviceId);
+        }
+
+        $otherActiveCount = $otherActiveQuery->count();
+
+        // Unbound active subscriptions exist but cannot be used until bound on the purchasing device
+        $unboundActiveCount = $user->subscriptions()
+            ->where('status', 'active')
+            ->where('expires_at', '>', now())
+            ->whereNull('device_id')
             ->count();
 
         return response()->json([
@@ -503,6 +530,7 @@ class SubscriptionController extends Controller
             'data' => [
                 'has_active_subscription' => $hasActiveForDevice,
                 'other_devices_active' => $otherActiveCount > 0,
+                'needs_device_binding' => $unboundActiveCount > 0,
                 'subscription_device_bound' => $activeSubscription && !empty($activeSubscription->device_id),
                 'subscription' => $activeSubscription ? [
                     'id' => $activeSubscription->id,

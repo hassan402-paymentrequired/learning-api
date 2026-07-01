@@ -20,6 +20,14 @@ class SubscriptionPinController extends Controller
         ]);
 
         $user = auth()->user();
+        $deviceId = $request->header('X-Device-Id');
+
+        if (empty($deviceId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Device ID is required to activate subscription.',
+            ], 400);
+        }
 
         // Find the PIN — it must belong to this user and be unused
         $subscriptionPin = SubscriptionPin::where('pin', $request->pin)
@@ -60,6 +68,7 @@ class SubscriptionPinController extends Controller
             'type'                 => 'pin',
             'starts_at'            => now(),
             'expires_at'           => $expiresAt,
+            'device_id'            => $deviceId,
             'amount_paid'          => 0, // PIN-based is usually prepaid/free at this point
             'original_amount'      => 0,
             'discount_amount'      => 0,

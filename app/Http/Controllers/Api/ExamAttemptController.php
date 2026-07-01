@@ -197,6 +197,7 @@ class ExamAttemptController extends Controller
         // Create fresh attempt (users cannot continue any practice session)
         $attempt = ExamAttempt::create([
             'user_id' => $user->id,
+            'device_id' => $deviceId,
             'exam_id' => $examId,
             'status' => 'in_progress',
             'started_at' => now(),
