@@ -8,6 +8,7 @@ use App\Models\Question;
 use App\Models\Subject;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ExamCategoryResolver
 {
@@ -16,6 +17,16 @@ class ExamCategoryResolver
         'JAMB' => 'jamb',
         'DLI' => 'unilag-dli',
         'UNILAG' => 'unilag-dli',
+    ];
+
+    /**
+     * Alternate slugs that refer to the same exam category.
+     * Live admin may create "UNILAG POST UME" (unilag-post-ume) while content uses unilag-post-utme.
+     *
+     * @var array<string, string>
+     */
+    private const SLUG_ALIASES = [
+        'unilag-post-ume' => 'unilag-post-utme',
     ];
 
     public function resolve(string|int|null $examType): ?ExamCategory
@@ -29,10 +40,18 @@ class ExamCategoryResolver
         }
 
         $value = (string) $examType;
+        $slugCandidates = $this->slugCandidates($value);
 
-        $category = ExamCategory::where('slug', $value)
-            ->orWhereRaw('LOWER(slug) = ?', [strtolower($value)])
-            ->orWhereRaw('LOWER(name) = ?', [strtolower($value)])
+        $category = ExamCategory::query()
+            ->where(function (Builder $query) use ($value, $slugCandidates) {
+                $query->whereIn('slug', $slugCandidates)
+                    ->orWhereRaw('LOWER(slug) = ?', [strtolower($value)])
+                    ->orWhereRaw('LOWER(name) = ?', [strtolower($value)]);
+
+                foreach ($slugCandidates as $slug) {
+                    $query->orWhereRaw('LOWER(name) = ?', [str_replace('-', ' ', strtoupper($slug))]);
+                }
+            })
             ->first();
 
         if ($category) {
@@ -44,6 +63,26 @@ class ExamCategoryResolver
         return $mappedSlug
             ? ExamCategory::where('slug', $mappedSlug)->first()
             : null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function slugCandidates(string $value): array
+    {
+        $normalized = strtolower(trim($value));
+        $canonical = self::SLUG_ALIASES[$normalized] ?? $normalized;
+
+        $candidates = [$normalized, $canonical];
+
+        foreach (self::SLUG_ALIASES as $alias => $target) {
+            if ($normalized === $alias || $normalized === $target || $canonical === $target) {
+                $candidates[] = $alias;
+                $candidates[] = $target;
+            }
+        }
+
+        return array_values(array_unique(array_filter($candidates)));
     }
 
     public function legacyToSlug(string $value): ?string
@@ -99,12 +138,14 @@ class ExamCategoryResolver
         }
 
         $tokens = [(string) $examType];
+        $tokens = array_merge($tokens, $this->slugCandidates((string) $examType));
         $category = $this->resolve($examType);
 
         if ($category) {
             $tokens[] = $category->slug;
             $tokens[] = (string) $category->id;
             $tokens[] = strtoupper($category->slug);
+            $tokens = array_merge($tokens, $this->slugCandidates($category->slug));
 
             foreach (self::LEGACY_TO_SLUG as $legacy => $slug) {
                 if ($slug === $category->slug) {
@@ -116,6 +157,7 @@ class ExamCategoryResolver
             if ($mapped) {
                 $tokens[] = $mapped;
                 $tokens[] = strtoupper($mapped);
+                $tokens = array_merge($tokens, $this->slugCandidates($mapped));
             }
         }
 
@@ -126,8 +168,9 @@ class ExamCategoryResolver
     {
         $category = $this->resolve($examType);
         $tokens = $this->matchTokens($examType);
+        $categoryIds = $this->relatedCategoryIds($category, $examType);
 
-        return $query->where(function (Builder $q) use ($tokens, $category, $examType) {
+        return $query->where(function (Builder $q) use ($tokens, $categoryIds) {
             if (!empty($tokens)) {
                 $q->where(function (Builder $inner) use ($tokens) {
                     foreach ($tokens as $token) {
@@ -136,15 +179,11 @@ class ExamCategoryResolver
                 });
             }
 
-            $q->orWhereHas('examCategories', function (Builder $cq) use ($category, $examType) {
-                if ($category) {
-                    $cq->where('exam_categories.id', $category->id);
-                } elseif (is_numeric($examType)) {
-                    $cq->where('exam_categories.id', (int) $examType);
-                } else {
-                    $cq->where('exam_categories.slug', $examType);
-                }
-            });
+            if (!empty($categoryIds)) {
+                $q->orWhereHas('examCategories', function (Builder $cq) use ($categoryIds) {
+                    $cq->whereIn('exam_categories.id', $categoryIds);
+                });
+            }
         });
     }
 
@@ -152,8 +191,9 @@ class ExamCategoryResolver
     {
         $category = $this->resolve($examType);
         $tokens = $this->matchTokens($examType);
+        $categoryIds = $this->relatedCategoryIds($category, $examType);
 
-        return $query->where(function (Builder $q) use ($tokens, $category, $examType) {
+        return $query->where(function (Builder $q) use ($tokens, $categoryIds) {
             if (!empty($tokens)) {
                 $q->where(function (Builder $inner) use ($tokens) {
                     foreach ($tokens as $token) {
@@ -162,8 +202,8 @@ class ExamCategoryResolver
                 });
             }
 
-            $q->orWhereHas('questions', function (Builder $questionQuery) use ($tokens, $category, $examType) {
-                $questionQuery->where(function (Builder $inner) use ($tokens, $category, $examType) {
+            $q->orWhereHas('questions', function (Builder $questionQuery) use ($tokens, $categoryIds) {
+                $questionQuery->where(function (Builder $inner) use ($tokens, $categoryIds) {
                     if (!empty($tokens)) {
                         $inner->where(function (Builder $tokenQuery) use ($tokens) {
                             foreach ($tokens as $token) {
@@ -172,18 +212,36 @@ class ExamCategoryResolver
                         });
                     }
 
-                    $inner->orWhereHas('examCategories', function (Builder $cq) use ($category, $examType) {
-                        if ($category) {
-                            $cq->where('exam_categories.id', $category->id);
-                        } elseif (is_numeric($examType)) {
-                            $cq->where('exam_categories.id', (int) $examType);
-                        } else {
-                            $cq->where('exam_categories.slug', $examType);
-                        }
-                    });
+                    if (!empty($categoryIds)) {
+                        $inner->orWhereHas('examCategories', function (Builder $cq) use ($categoryIds) {
+                            $cq->whereIn('exam_categories.id', $categoryIds);
+                        });
+                    }
                 });
             });
         });
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function relatedCategoryIds(?ExamCategory $category, string|int $examType): array
+    {
+        if ($category) {
+            return ExamCategory::query()
+                ->whereIn('slug', $this->slugCandidates($category->slug))
+                ->pluck('id')
+                ->all();
+        }
+
+        if (is_numeric($examType)) {
+            return [(int) $examType];
+        }
+
+        return ExamCategory::query()
+            ->whereIn('slug', $this->slugCandidates((string) $examType))
+            ->pluck('id')
+            ->all();
     }
 
     public function syncQuestionCategories(Question $question, ?array $examTypeSlugs = null): void
@@ -217,6 +275,70 @@ class ExamCategoryResolver
         return ExamCategory::whereIn('slug', $slugs)
             ->where('flow_type', 'departmental')
             ->exists();
+    }
+
+    /**
+     * When an exam category slug changes, update all content that references the old slug.
+     */
+    public function propagateSlugChange(string $oldSlug, string $newSlug): array
+    {
+        $oldSlug = strtolower(trim($oldSlug));
+        $newSlug = strtolower(trim($newSlug));
+
+        if ($oldSlug === '' || $newSlug === '' || $oldSlug === $newSlug) {
+            return ['subjects' => 0, 'questions' => 0, 'exams' => 0];
+        }
+
+        $counts = ['subjects' => 0, 'questions' => 0, 'exams' => 0];
+
+        Subject::query()->each(function (Subject $subject) use ($oldSlug, $newSlug, &$counts) {
+            $examTypes = $subject->exam_types ?? [];
+            $updated = $this->replaceSlugTokenInList($examTypes, $oldSlug, $newSlug);
+
+            if ($updated !== $examTypes) {
+                $subject->update(['exam_types' => $updated]);
+                $counts['subjects']++;
+            }
+        });
+
+        Question::query()->each(function (Question $question) use ($oldSlug, $newSlug, &$counts) {
+            $examTypes = $question->exam_types ?? [];
+            $updated = $this->replaceSlugTokenInList($examTypes, $oldSlug, $newSlug);
+
+            if ($updated !== $examTypes) {
+                $question->update(['exam_types' => $updated]);
+                $this->syncQuestionCategories($question, $updated);
+                $counts['questions']++;
+            }
+        });
+
+        if (Schema::hasColumn('exams', 'exam_type')) {
+            $counts['exams'] = Exam::query()
+                ->whereRaw('LOWER(exam_type) = ?', [$oldSlug])
+                ->update(['exam_type' => $newSlug]);
+        }
+
+        return $counts;
+    }
+
+    /**
+     * @param  array<int, string|int>  $examTypes
+     * @return array<int, string|int>
+     */
+    private function replaceSlugTokenInList(array $examTypes, string $oldSlug, string $newSlug): array
+    {
+        $normalized = [];
+
+        foreach ($examTypes as $type) {
+            if (is_string($type) && strtolower($type) === $oldSlug) {
+                $normalized[] = $newSlug;
+                continue;
+            }
+
+            $normalized[] = $type;
+        }
+
+        return array_values(array_unique($normalized));
     }
 
     public function syncAllSubjects(): int

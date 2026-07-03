@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 
 interface ExamCategory {
     id: number;
@@ -24,7 +24,6 @@ interface Props {
 export default function EditExamCategory({ examCategory }: Props) {
     const { data, setData, patch, processing, errors } = useForm({
         name: examCategory.name,
-        slug: examCategory.slug,
         flow_type: examCategory.flow_type || 'standard',
         description: examCategory.description || '',
         is_active: examCategory.is_active,
@@ -62,12 +61,26 @@ export default function EditExamCategory({ examCategory }: Props) {
                                     id="name"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
-                                    placeholder="e.g., Faculty of Science, Faculty of Arts"
+                                    placeholder="e.g., UNILAG POST UTME"
                                     required
                                 />
                                 {errors.name && (
                                     <p className="text-sm text-red-500">{errors.name}</p>
                                 )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="slug">Slug (fixed at creation)</Label>
+                                <Input
+                                    id="slug"
+                                    value={examCategory.slug}
+                                    readOnly
+                                    disabled
+                                    className="bg-muted"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Used by the app and linked subjects/questions. Renaming the display name above does not change this.
+                                </p>
                             </div>
 
                             <div className="space-y-2">

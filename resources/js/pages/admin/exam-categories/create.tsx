@@ -10,6 +10,14 @@ import { Save } from 'lucide-react';
 import { type BreadcrumbItem } from '@/types';
 import admin from '@/routes/admin';
 
+function slugify(value: string): string {
+    return value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Exam Categories', href: admin.examCategories.index().url },
     { title: 'Create Exam Category', href: '#' },
@@ -54,12 +62,36 @@ export default function CreateExamCategory() {
                                 <Input
                                     id="name"
                                     value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    placeholder="e.g., Faculty of Science, Faculty of Arts"
+                                    onChange={(e) => {
+                                        const name = e.target.value;
+                                        setData((current) => ({
+                                            ...current,
+                                            name,
+                                            slug: current.slug ? current.slug : slugify(name),
+                                        }));
+                                    }}
+                                    placeholder="e.g., UNILAG POST UTME"
                                     required
                                 />
                                 {errors.name && (
                                     <p className="text-sm text-red-500">{errors.name}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="slug">URL slug *</Label>
+                                <Input
+                                    id="slug"
+                                    value={data.slug}
+                                    onChange={(e) => setData('slug', slugify(e.target.value))}
+                                    placeholder="e.g., unilag-post-utme"
+                                    required
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Must match the slug used on subjects and questions (e.g. unilag-post-utme, not unilag-post-ume).
+                                </p>
+                                {errors.slug && (
+                                    <p className="text-sm text-red-500">{errors.slug}</p>
                                 )}
                             </div>
 

@@ -42,12 +42,13 @@ class ExamCategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:exam_categories',
+            'slug' => 'nullable|string|max:255|unique:exam_categories,slug|regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
             'flow_type' => 'required|string|max:255',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
 
-        $validated['slug'] = Str::slug($validated['name']);
+        $validated['slug'] = Str::slug($validated['slug'] ?? $validated['name']);
 
         ExamCategory::create($validated);
 
@@ -71,8 +72,7 @@ class ExamCategoryController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $validated['slug'] = Str::slug($validated['name']);
-
+        // Slug is set once at creation and never changed — subjects/questions reference it.
         $examCategory->update($validated);
 
         return redirect()->route('admin.exam-categories.index')

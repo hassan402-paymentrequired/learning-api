@@ -15,6 +15,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 
+function slugify(value: string): string {
+    return value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
 interface ExamCategory {
     id: number;
     name: string;
@@ -48,6 +56,7 @@ export default function ExamCategoriesIndex({ examCategories, filters }: Props) 
 
     const createForm = useForm({
         name: '',
+        slug: '',
         flow_type: 'standard',
         description: '',
         is_active: true,
@@ -329,12 +338,32 @@ export default function ExamCategoriesIndex({ examCategories, filters }: Props) 
                                 <Input
                                     id="create-name"
                                     value={createForm.data.name}
-                                    onChange={(e) => createForm.setData('name', e.target.value)}
-                                    placeholder="e.g., JAMB, UNILAG DLI"
+                                    onChange={(e) => {
+                                        const name = e.target.value;
+                                        createForm.setData((current) => ({
+                                            ...current,
+                                            name,
+                                            slug: current.slug ? current.slug : slugify(name),
+                                        }));
+                                    }}
+                                    placeholder="e.g., UNILAG POST UTME"
                                     required
                                 />
                                 {createForm.errors.name && (
                                     <p className="text-sm text-red-500">{createForm.errors.name}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="create-slug">URL slug *</Label>
+                                <Input
+                                    id="create-slug"
+                                    value={createForm.data.slug}
+                                    onChange={(e) => createForm.setData('slug', slugify(e.target.value))}
+                                    placeholder="e.g., unilag-post-utme"
+                                    required
+                                />
+                                {createForm.errors.slug && (
+                                    <p className="text-sm text-red-500">{createForm.errors.slug}</p>
                                 )}
                             </div>
                             <div className="space-y-2">
