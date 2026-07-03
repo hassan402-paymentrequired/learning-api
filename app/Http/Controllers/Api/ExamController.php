@@ -9,6 +9,8 @@ use App\Models\Exam;
 use App\Models\Question;
 use App\Models\Subject;
 use App\Services\ExamCategoryResolver;
+use App\Support\PublicId;
+use App\Support\PublicUuidLookup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -44,7 +46,7 @@ class ExamController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $exams,
+            'data' => PublicId::collection($exams),
         ]);
     }
 
@@ -278,12 +280,12 @@ class ExamController extends Controller
             'exam_type' => 'required',
             'subject' => 'required|string',
             'count' => ['required', 'integer', 'min:1', "max:{$maxCount}"],
-            'subject_test_id' => 'nullable|integer|exists:subject_tests,id',
+            'subject_test_uuid' => 'nullable|uuid|exists:subject_tests,uuid',
         ]);
 
         $examType = $request->input('exam_type');
         $subject = $request->input('subject');
-        $subjectTestId = $request->input('subject_test_id');
+        $subjectTestUuid = $request->input('subject_test_uuid');
         $requestedCount = $request->input('count');
         
         // Enforce 5-question limit for non-subscribed users
@@ -306,10 +308,11 @@ class ExamController extends Controller
         $query = Question::where('subject_id', $subjectModel->id);
         $resolver->applyQuestionExamTypeFilter($query, $examType);
 
-        // When subject_test_id provided (DLI), filter to questions belonging to that test
-        if ($subjectTestId) {
-            $query->whereHas('subjectTests', function ($q) use ($subjectTestId) {
-                $q->where('subject_tests.id', $subjectTestId);
+        // When subject_test_uuid provided (DLI), filter to questions belonging to that test
+        if ($subjectTestUuid) {
+            $subjectTest = PublicUuidLookup::findOrFail(\App\Models\SubjectTest::class, $subjectTestUuid);
+            $query->whereHas('subjectTests', function ($q) use ($subjectTest) {
+                $q->where('subject_tests.id', $subjectTest->id);
             });
         }
 
@@ -397,20 +400,10 @@ class ExamController extends Controller
             })
             ->values()
             ->map(function ($question, $index) {
-                return [
-                    'id' => $question->id,
-                    'question_text' => $question->question_text,
-                    'question_type' => $question->question_type,
-                    'image' => $question->image,
-                    'order' => $index + 1,
-                    'answers' => $question->answers->map(function ($answer) {
-                        return [
-                            'id' => $answer->id,
-                            'answer_text' => $answer->answer_text,
-                            'order' => $answer->order,
-                        ];
-                    }),
-                ];
+                $payload = PublicId::question($question);
+                $payload['order'] = $index + 1;
+
+                return $payload;
             });
 
         $response = [
@@ -513,28 +506,26 @@ class ExamController extends Controller
         $departments = Department::where('is_active', true)
             ->withCount('subjects')
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'description']);
+            ->get(['uuid', 'name', 'slug', 'description']);
 
         return response()->json([
             'success' => true,
-            'data' => $departments,
+            'data' => PublicId::collection($departments),
         ]);
     }
 
     /**
-     * Get subjects for a specific department (filtered by exam_type).
+     * Get subjects for a specific department (filtered by exam_type UUID or legacy slug).
      */
-    public function departmentSubjects(Request $request, ExamCategoryResolver $resolver, $departmentId)
+    public function departmentSubjects(Request $request, ExamCategoryResolver $resolver, Department $department)
     {
-       $v = $request->validate([
+        $request->validate([
             'exam_type' => 'required',
         ]);
 
-        Log::info('Department subjects request: ', $v);
-
-        $department = Department::where('id', $departmentId)
-            ->where('is_active', true)
-            ->firstOrFail();
+        if (!$department->is_active) {
+            abort(404);
+        }
 
         $subjectsQuery = Subject::where('is_active', true)
             ->where('department_id', $department->id);
@@ -542,14 +533,28 @@ class ExamController extends Controller
         $resolver->applySubjectExamTypeFilter($subjectsQuery, $request->exam_type);
 
         $subjects = $subjectsQuery
-            ->with('tests:id,subject_id,name')
+            ->with('tests:uuid,subject_id,name')
             ->withCount('questions')
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'description']);
+            ->get(['uuid', 'name', 'slug', 'description']);
+
+        $data = $subjects->map(function (Subject $subject) {
+            return [
+                'uuid' => $subject->uuid,
+                'name' => $subject->name,
+                'slug' => $subject->slug,
+                'description' => $subject->description,
+                'questions_count' => $subject->questions_count,
+                'tests' => $subject->tests->map(fn ($test) => [
+                    'uuid' => $test->uuid,
+                    'name' => $test->name,
+                ])->values(),
+            ];
+        });
 
         return response()->json([
             'success' => true,
-            'data' => $subjects,
+            'data' => $data,
         ]);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExamCategory;
+use App\Support\PublicId;
 use Illuminate\Http\Request;
 
 class ExamCategoryController extends Controller
@@ -17,7 +18,7 @@ class ExamCategoryController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $categories,
+            'data' => PublicId::collection($categories),
         ]);
     }
 }

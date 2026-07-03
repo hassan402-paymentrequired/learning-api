@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use App\Models\ExamAttempt;
 use App\Models\SecurityViolation;
+use App\Support\PublicUuidLookup;
 
 class SecurityController extends Controller
 {
@@ -17,18 +17,24 @@ class SecurityController extends Controller
         $request->validate([
             'type' => 'required|in:screenshot_attempt,context_menu,keyboard_shortcut,window_blur,window_hidden,potential_screen_recording',
             'details' => 'nullable|array',
-            'attempt_id' => 'nullable|integer',
+            'attempt_uuid' => 'nullable|uuid|exists:exam_attempts,uuid',
             'url' => 'nullable|string|max:255',
             'user_agent' => 'nullable|string|max:500',
         ]);
 
         $user = auth()->user();
+        $attemptId = null;
+        if ($request->filled('attempt_uuid')) {
+            $attempt = PublicUuidLookup::findOrFail(ExamAttempt::class, $request->input('attempt_uuid'));
+            $attemptId = $attempt->id;
+        }
+
         $violation = [
             'user_id' => $user->id,
             'user_email' => $user->email,
             'violation_type' => $request->input('type'),
             'details' => $request->input('details', []),
-            'attempt_id' => $request->input('attempt_id'),
+            'attempt_id' => $attemptId,
             'url' => $request->input('url'),
             'user_agent' => $request->input('user_agent'),
             'ip_address' => $request->ip(),
@@ -44,7 +50,7 @@ class SecurityController extends Controller
                 'user_id' => $user->id,
                 'violation_type' => $request->input('type'),
                 'details' => $request->input('details', []),
-                'attempt_id' => $request->input('attempt_id'),
+                'attempt_id' => $attemptId,
                 'url' => $request->input('url'),
                 'user_agent' => $request->input('user_agent'),
                 'ip_address' => $request->ip(),

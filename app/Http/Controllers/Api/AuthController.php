@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\PublicId;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -78,7 +79,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'User registered successfully. Please verify your email.',
                 'data' => [
-                    'user' => $user,
+                    'user' => PublicId::user($user),
                     'token' => $token,
                     'token_type' => 'bearer',
                     'email_verified' => false,
@@ -131,7 +132,7 @@ class AuthController extends Controller
             'success' => true,
             'message' => $user->email_verified_at ? 'Login successful' : 'Login successful. Please verify your email.',
             'data' => [
-                'user' => $user,
+                'user' => PublicId::user($user),
                 'token' => $token,
                 'token_type' => 'bearer',
                 'expires_in' => JWTAuth::factory()->getTTL() * 60, // in seconds
@@ -148,7 +149,7 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'user' => JWTAuth::user(),
+                'user' => PublicId::user(JWTAuth::user()),
             ],
         ]);
     }

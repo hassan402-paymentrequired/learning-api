@@ -42,7 +42,7 @@ class ReferralController extends Controller
             ->get()
             ->map(function ($referral) {
                 return [
-                    'id' => $referral->id,
+                    'uuid' => $referral->uuid,
                     'referred_user' => [
                         'name' => $referral->referred->name,
                         'email' => $referral->referred->email,

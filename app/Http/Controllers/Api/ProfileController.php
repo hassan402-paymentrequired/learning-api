@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\PublicId;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -17,7 +18,7 @@ class ProfileController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'user' => auth()->user(),
+                'user' => PublicId::user(auth()->user()),
             ],
         ]);
     }
@@ -74,7 +75,7 @@ class ProfileController extends Controller
             'success' => true,
             'message' => 'Profile updated successfully.',
             'data' => [
-                'user' => $user->fresh(),
+                'user' => PublicId::user($user->fresh()),
             ],
         ]);
     }

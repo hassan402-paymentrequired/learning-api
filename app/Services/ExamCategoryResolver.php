@@ -6,9 +6,11 @@ use App\Models\Exam;
 use App\Models\ExamCategory;
 use App\Models\Question;
 use App\Models\Subject;
+use App\Support\PublicUuidLookup;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class ExamCategoryResolver
 {
@@ -40,6 +42,11 @@ class ExamCategoryResolver
         }
 
         $value = (string) $examType;
+
+        if (PublicUuidLookup::isUuid($value)) {
+            return ExamCategory::where('uuid', $value)->first();
+        }
+
         $slugCandidates = $this->slugCandidates($value);
 
         $category = ExamCategory::query()
@@ -143,6 +150,7 @@ class ExamCategoryResolver
 
         if ($category) {
             $tokens[] = $category->slug;
+            $tokens[] = $category->uuid;
             $tokens[] = (string) $category->id;
             $tokens[] = strtoupper($category->slug);
             $tokens = array_merge($tokens, $this->slugCandidates($category->slug));

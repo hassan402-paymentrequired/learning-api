@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ExamAttempt;
 use App\Models\User;
+use App\Support\PublicId;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -64,13 +65,13 @@ class LeaderboardController extends Controller
             ->orderBy('total_score', 'desc')
             ->orderBy('average_score', 'desc')
             ->limit($limit)
-            ->with('user:id,name,email')
+            ->with('user:id,name,email,uuid')
             ->get()
             ->map(function ($item, $index) use ($examType) {
                 return [
                     'rank' => $index + 1,
                     'user' => [
-                        'id' => $item->user->id,
+                        'uuid' => $item->user->uuid,
                         'name' => $item->user->name,
                         'email' => $item->user->email,
                     ],
@@ -141,7 +142,7 @@ class LeaderboardController extends Controller
                 $userRank = [
                     'rank' => $usersAbove + 1,
                     'user' => [
-                        'id' => $currentUser->id,
+                        'uuid' => $currentUser->uuid,
                         'name' => $currentUser->name,
                         'email' => $currentUser->email,
                     ],
@@ -271,7 +272,7 @@ class LeaderboardController extends Controller
             ->whereHas('exam', function ($q) {
                 $q->where('title', 'LIKE', '%Practice Session%');
             })
-            ->with(['user:id,name,email', 'exam:id,title,exam_type'])
+            ->with(['user:id,name,email,uuid', 'exam:id,title,exam_type,uuid'])
             ->orderBy('completed_at', 'desc')
             ->get();
 
@@ -295,7 +296,7 @@ class LeaderboardController extends Controller
                 $topPerformers[] = [
                     'rank' => count($topPerformers) + 1,
                     'user' => [
-                        'id' => $attempt->user->id,
+                        'uuid' => $attempt->user->uuid,
                         'name' => $attempt->user->name,
                         'email' => $attempt->user->email,
                     ],

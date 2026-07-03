@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Support\PublicId;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -65,15 +66,7 @@ class SubscriptionController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'id' => $plan->id,
-                'name' => $plan->name,
-                'description' => $plan->description,
-                'price' => (float) $plan->price,
-                'currency' => $plan->currency,
-                'interval' => $plan->interval,
-                'interval_count' => $plan->interval_count,
-            ],
+            'data' => PublicId::subscriptionPlan($plan),
         ]);
     }
 
@@ -83,12 +76,15 @@ class SubscriptionController extends Controller
     public function initializePayment(Request $request)
     {
         $request->validate([
-            'plan_id' => 'required|exists:subscription_plans,id',
+            'plan_uuid' => 'required_without:plan_id|uuid|exists:subscription_plans,uuid',
+            'plan_id' => 'required_without:plan_uuid|exists:subscription_plans,id',
             'referral_code' => 'nullable|string|exists:users,referral_code',
         ]);
 
         $user = auth()->user();
-        $plan = SubscriptionPlan::findOrFail($request->plan_id);
+        $plan = $request->filled('plan_uuid')
+            ? SubscriptionPlan::where('uuid', $request->plan_uuid)->firstOrFail()
+            : SubscriptionPlan::findOrFail($request->plan_id);
         $deviceId = $request->header('X-Device-Id');
 
         if (empty($deviceId)) {
@@ -250,7 +246,7 @@ class SubscriptionController extends Controller
                 'authorization_url' => $paymentData['authorization_url'],
                 'access_code' => $paymentData['access_code'],
                 'reference' => $paymentData['reference'],
-                'subscription_id' => $subscription->id,
+                'subscription_uuid' => $subscription->uuid,
                 'callback_url' => $callbackUrl,
                 'cancel_url' => $cancelUrl,
             ],
@@ -318,7 +314,7 @@ class SubscriptionController extends Controller
 
                 if ($referral) {
                     $referral->update([
-                        'subscription_id' => $subscription->id,
+                        'subscription_uuid' => $subscription->uuid,
                         'referrer_reward_amount' => 500,
                         'status' => 'rewarded',
                         'rewarded_at' => now(),
@@ -402,7 +398,7 @@ class SubscriptionController extends Controller
 
                 if ($referral) {
                     $referral->update([
-                        'subscription_id' => $subscription->id,
+                        'subscription_uuid' => $subscription->uuid,
                         'referrer_reward_amount' => 500,
                         'status' => 'rewarded',
                         'rewarded_at' => now(),
@@ -424,11 +420,7 @@ class SubscriptionController extends Controller
             'success' => true,
             'message' => 'Subscription activated successfully.',
             'data' => [
-                'subscription' => [
-                    'id' => $subscription->id,
-                    'status' => $subscription->status,
-                    'expires_at' => $subscription->expires_at->toIso8601String(),
-                ],
+                'subscription' => PublicId::subscription($subscription->fresh()->load('plan')),
             ],
         ]);
     }
@@ -485,7 +477,7 @@ class SubscriptionController extends Controller
             'success' => true,
             'message' => 'This device is now linked to your subscription.',
             'data' => [
-                'subscription_id' => $subscription->id,
+                'subscription_uuid' => $subscription->uuid,
                 'expires_at' => $subscription->expires_at->toIso8601String(),
             ]
         ]);
@@ -532,15 +524,9 @@ class SubscriptionController extends Controller
                 'other_devices_active' => $otherActiveCount > 0,
                 'needs_device_binding' => $unboundActiveCount > 0,
                 'subscription_device_bound' => $activeSubscription && !empty($activeSubscription->device_id),
-                'subscription' => $activeSubscription ? [
-                    'id' => $activeSubscription->id,
-                    'type' => $activeSubscription->type,
-                    'plan' => [
-                        'name' => $activeSubscription->plan->name,
-                        'price' => (float) $activeSubscription->plan->price,
-                    ],
-                    'expires_at' => $activeSubscription->expires_at->toIso8601String(),
-                ] : null,
+                'subscription' => $activeSubscription
+                    ? PublicId::subscription($activeSubscription->load('plan'))
+                    : null,
             ],
         ]);
     }

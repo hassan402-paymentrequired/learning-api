@@ -19,7 +19,7 @@ class AnnouncementController extends Controller
             ->get()
             ->map(function ($announcement) {
                 return [
-                    'id' => $announcement->id,
+                    'uuid' => $announcement->uuid,
                     'title' => $announcement->title,
                     'message' => $announcement->message,
                     'type' => $announcement->type,

@@ -7,9 +7,13 @@ use App\Services\ExamCategoryResolver;
 use App\Models\Exam;
 use App\Models\ExamAttempt;
 use App\Models\Question;
+use App\Models\Answer;
 use App\Models\UserAnswer;
 use App\Models\UserStreak;
 use App\Models\Subject;
+use App\Models\SubjectTest;
+use App\Support\PublicId;
+use App\Support\PublicUuidLookup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -39,7 +43,7 @@ class ExamAttemptController extends Controller
                 'success' => true,
                 'message' => 'Resuming existing attempt',
                 'data' => [
-                    'attempt' => $existingAttempt->load('exam'),
+                    'attempt' => PublicId::attemptSummary($existingAttempt->load('exam')),
                 ],
             ]);
         }
@@ -64,10 +68,18 @@ class ExamAttemptController extends Controller
 
         if ($subjects !== null) {
             // Process subjects to include question_ids if provided
-            $processedSubjects = array_map(function($subject) {
+            $processedSubjects = array_map(function ($subject) {
                 if (isset($subject['questions']) && is_array($subject['questions'])) {
-                    $subject['question_ids'] = array_column($subject['questions'], 'id');
-                    unset($subject['questions']); // Remove full objects to save space
+                    $subject['question_uuids'] = array_values(array_filter(array_map(
+                        fn ($q) => is_array($q) ? ($q['uuid'] ?? null) : null,
+                        $subject['questions']
+                    )));
+                    unset($subject['questions']);
+                } elseif (isset($subject['question_ids']) && is_array($subject['question_ids'])) {
+                    $subject['question_uuids'] = Question::whereIn('id', $subject['question_ids'])
+                        ->pluck('uuid')
+                        ->all();
+                    unset($subject['question_ids']);
                 }
                 return $subject;
             }, $subjects);
@@ -84,7 +96,7 @@ class ExamAttemptController extends Controller
             'success' => true,
             'message' => 'Exam started successfully',
             'data' => [
-                'attempt' => $attempt->load('exam'),
+                'attempt' => PublicId::attemptSummary($attempt->load('exam')),
             ],
         ], 201);
     }
@@ -101,8 +113,8 @@ class ExamAttemptController extends Controller
             'subjects.*.subject' => 'required|string',
             'subjects.*.year' => 'nullable|integer',
             'subjects.*.question_count' => 'required|integer|min:1|max:100',
-            'subjects.*.question_ids' => 'nullable|array',
-            'subjects.*.subject_test_id' => 'nullable|integer',
+            'subjects.*.question_uuids' => 'nullable|array',
+            'subjects.*.subject_test_uuid' => 'nullable|uuid|exists:subject_tests,uuid',
             'duration_minutes' => 'required|integer|min:1|max:300',
         ]);
 
@@ -110,10 +122,7 @@ class ExamAttemptController extends Controller
         $subjectsInput = $request->input('subjects');
         $durationMinutes = $request->input('duration_minutes');
         
-        // Find the exam category to get consistent slug/name for the practice record
-        $examCategory = \App\Models\ExamCategory::where('id', $examType)
-            ->orWhere('slug', $examType)
-            ->first();
+        $examCategory = $resolver->resolve($examType);
         
         $categorySlug = $examCategory ? $examCategory->slug : $examType;
         $categoryName = $examCategory ? $examCategory->name : $examType;
@@ -128,9 +137,8 @@ class ExamAttemptController extends Controller
         foreach ($subjectsInput as $sInput) {
             $subjectName = $sInput['subject'];
             $requestedCount = $sInput['question_count'];
-            $subjectTestId = $sInput['subject_test_id'] ?? null;
+            $subjectTestUuid = $sInput['subject_test_uuid'] ?? null;
             $year = $sInput['year'] ?? null;
-            $inputQuestionIds = $sInput['question_ids'] ?? null;
             
             // Limit questions for non-subscribed users
             $count = $hasActiveSubscription ? $requestedCount : min($requestedCount, 5);
@@ -141,9 +149,10 @@ class ExamAttemptController extends Controller
             $query = Question::where('subject_id', $subjectModel->id);
             $resolver->applyQuestionExamTypeFilter($query, $examType);
 
-            if ($subjectTestId) {
-                $query->whereHas('subjectTests', function ($q) use ($subjectTestId) {
-                    $q->where('subject_tests.id', $subjectTestId);
+            if ($subjectTestUuid) {
+                $subjectTest = PublicUuidLookup::findOrFail(SubjectTest::class, $subjectTestUuid);
+                $query->whereHas('subjectTests', function ($q) use ($subjectTest) {
+                    $q->where('subject_tests.id', $subjectTest->id);
                 });
             }
 
@@ -161,27 +170,14 @@ class ExamAttemptController extends Controller
             if ($questions->isEmpty()) continue;
 
             // Format questions for frontend
-            $formattedQuestions = $questions->map(function($q) {
-                return [
-                    'id' => $q->id,
-                    'question_text' => $q->question_text,
-                    'question_type' => $q->question_type,
-                    'image' => $q->image,
-                    'explanation' => $q->explanation,
-                    'answers' => $q->answers->map(fn($a) => [
-                        'id' => $a->id,
-                        'answer_text' => $a->answer_text,
-                        'order' => $a->order,
-                    ])
-                ];
-            });
+            $formattedQuestions = $questions->map(fn ($q) => PublicId::question($q));
 
             $allQuestionsData[$subjectName] = $formattedQuestions;
             
             $processedSubjects[] = [
                 'subject' => $subjectName,
                 'question_count' => $questions->count(),
-                'question_ids' => $questions->pluck('id')->toArray(),
+                'question_uuids' => $questions->pluck('uuid')->toArray(),
             ];
             
             $totalQuestions += $questions->count();
@@ -211,7 +207,14 @@ class ExamAttemptController extends Controller
             'success' => true,
             'message' => 'Practice session started successfully',
             'data' => [
-                'attempt' => $attempt->load('exam'),
+                'attempt' => [
+                    'uuid' => $attempt->uuid,
+                    'exam_uuid' => $attempt->exam?->uuid,
+                    'status' => $attempt->status,
+                    'started_at' => $attempt->started_at,
+                    'duration_minutes' => $attempt->duration_minutes,
+                    'total_questions' => $attempt->total_questions,
+                ],
                 'questions' => $allQuestionsData,
                 'has_active_subscription' => $hasActiveSubscription,
             ],
@@ -238,13 +241,13 @@ class ExamAttemptController extends Controller
         }
 
         $request->validate([
-            'question_id' => 'required|exists:questions,id',
-            'answer_id' => 'nullable|exists:answers,id',
+            'question_uuid' => 'required|uuid|exists:questions,uuid',
+            'answer_uuid' => 'nullable|uuid',
             'answer_text' => 'nullable|string',
             'time_spent' => 'nullable|integer|min:0',
         ]);
 
-        $question = Question::findOrFail($request->question_id);
+        $question = Question::where('uuid', $request->question_uuid)->firstOrFail();
         
         // Handle different question types
         if (in_array($question->question_type, ['text_input', 'numeric_input'])) {
@@ -289,15 +292,25 @@ class ExamAttemptController extends Controller
                 $answer->update(['is_correct' => $isCorrect]);
             }
         } else {
-            // For multiple_choice and true_false, we need answer_id
-            if (!$request->has('answer_id')) {
+            if (!$request->has('answer_uuid') && !$request->has('answer_text')) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Answer ID is required for multiple choice and true/false questions',
+                    'message' => 'Answer is required for multiple choice and true/false questions',
                 ], 400);
             }
-            
-            $answer = $question->answers()->findOrFail($request->answer_id);
+
+            $answer = $this->resolveChoiceAnswer(
+                $question,
+                $request->input('answer_uuid'),
+                $request->input('answer_text')
+            );
+
+            if (!$answer) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid answer for this question',
+                ], 400);
+            }
         }
 
         // Check if answer already exists for this question
@@ -350,31 +363,33 @@ class ExamAttemptController extends Controller
 
         $request->validate([
             'answers' => 'required|array',
-            'answers.*.question_id' => 'required|exists:questions,id',
-            'answers.*.answer_id' => 'nullable|exists:answers,id',
+            'answers.*.question_uuid' => 'required|uuid|exists:questions,uuid',
+            'answers.*.answer_uuid' => 'nullable|uuid',
             'answers.*.answer_text' => 'nullable|string',
             'answers.*.time_spent' => 'nullable|integer|min:0',
         ]);
 
-        $questionIds = collect($request->answers)->pluck('question_id')->unique()->toArray();
-        $questions = \App\Models\Question::whereIn('id', $questionIds)->with('answers')->get()->keyBy('id');
+        $questionUuids = collect($request->answers)->pluck('question_uuid')->unique()->toArray();
+        $questions = Question::whereIn('uuid', $questionUuids)->with('answers')->get()->keyBy('uuid');
+
+        $questionIds = $questions->pluck('id')->all();
 
         // Fetch existing answers to update instead of create newly
-        $existingAnswers = \App\Models\UserAnswer::where('exam_attempt_id', $attempt->id)
+        $existingAnswers = UserAnswer::where('exam_attempt_id', $attempt->id)
             ->whereIn('question_id', $questionIds)
             ->get()
             ->keyBy('question_id');
 
-        \Illuminate\Support\Facades\DB::beginTransaction();
+        DB::beginTransaction();
 
         try {
             foreach ($request->answers as $answerData) {
-                $questionId = $answerData['question_id'] ?? null;
-                if (!$questionId || !$questions->has($questionId)) continue;
+                $questionUuid = $answerData['question_uuid'] ?? null;
+                if (!$questionUuid || !$questions->has($questionUuid)) continue;
 
-                $question = $questions[$questionId];
+                $question = $questions[$questionUuid];
                 $answerText = $answerData['answer_text'] ?? null;
-                $answerId = $answerData['answer_id'] ?? null;
+                $answerUuid = $answerData['answer_uuid'] ?? null;
                 $timeSpent = $answerData['time_spent'] ?? 0;
 
                 $finalAnswer = null;
@@ -403,18 +418,15 @@ class ExamAttemptController extends Controller
                         $finalAnswer->update(['is_correct' => $isCorrect]);
                     }
                 } else {
-                    if (!$answerId) continue;
-                    // For multiple choice, we get the answer from the DB or the loaded relation
-                    $finalAnswer = $question->answers->where('id', $answerId)->first();
-                    if (!$finalAnswer) {
-                        $finalAnswer = $question->answers()->find($answerId);
-                    }
+                    if (!$answerUuid && empty($answerText)) continue;
+
+                    $finalAnswer = $this->resolveChoiceAnswer($question, $answerUuid, $answerText);
                 }
 
                 if (!$finalAnswer) continue;
 
-                if ($existingAnswers->has($questionId)) {
-                    $existing = $existingAnswers[$questionId];
+                if ($existingAnswers->has($question->id)) {
+                    $existing = $existingAnswers[$question->id];
                     $existing->update([
                         'answer_id' => $finalAnswer->id,
                         'is_correct' => $finalAnswer->is_correct,
@@ -573,7 +585,7 @@ class ExamAttemptController extends Controller
             'success' => true,
             'message' => 'Exam completed successfully',
             'data' => [
-                'attempt' => $attempt->fresh(),
+                'attempt' => PublicId::attemptSummary($attempt->fresh()->load('exam')),
                 'percentage' => $attempt->percentage,
             ],
         ]);
@@ -596,23 +608,7 @@ class ExamAttemptController extends Controller
             $query->where('exam_id', $request->exam_id);
         }
 
-        $attempts = $query->get()->map(function ($attempt) {
-            return [
-                'id' => $attempt->id,
-                'exam' => [
-                    'id' => $attempt->exam_id,
-                    'title' => $attempt->exam ? $attempt->exam->title : "Practice Session",
-                    'type' => $attempt->exam ? $attempt->exam->exam_type : "Practice",
-                ],
-                'status' => $attempt->status,
-                'score' => $attempt->score,
-                'correct_answers' => $attempt->correct_answers,
-                'total_questions' => $attempt->total_questions,
-                'percentage' => $attempt->percentage,
-                'started_at' => $attempt->started_at,
-                'completed_at' => $attempt->completed_at,
-            ];
-        });
+        $attempts = $query->get()->map(fn ($attempt) => PublicId::attemptSummary($attempt));
 
         return response()->json([
             'success' => true,
@@ -636,7 +632,7 @@ class ExamAttemptController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $attempt,
+            'data' => PublicId::attemptSummary($attempt->load(['exam', 'userAnswers.question', 'userAnswers.answer'])),
         ]);
     }
 
@@ -674,7 +670,11 @@ class ExamAttemptController extends Controller
         $hasRichMetadata = false;
         if ($subjectsData && is_array($subjectsData)) {
             foreach ($subjectsData as $subject) {
-                if (isset($subject['question_ids']) && is_array($subject['question_ids']) && !empty($subject['question_ids'])) {
+                if (isset($subject['question_uuids']) && is_array($subject['question_uuids']) && !empty($subject['question_uuids'])) {
+                    $idsFromUuids = Question::whereIn('uuid', $subject['question_uuids'])->pluck('id')->all();
+                    $assignedQuestionIds = array_merge($assignedQuestionIds, $idsFromUuids);
+                    $hasRichMetadata = true;
+                } elseif (isset($subject['question_ids']) && is_array($subject['question_ids']) && !empty($subject['question_ids'])) {
                     $assignedQuestionIds = array_merge($assignedQuestionIds, $subject['question_ids']);
                     $hasRichMetadata = true;
                 }
@@ -701,14 +701,14 @@ class ExamAttemptController extends Controller
                 if (in_array($question->question_type, ['text_input', 'numeric_input'])) {
                     if ($question->expected_answer) {
                         $correctAnswerData = [
-                            'id' => null,
+                            'uuid' => null,
                             'answer_text' => $question->expected_answer,
                             'order' => null,
                         ];
                     }
                 } else if ($correctAnswer) {
                     $correctAnswerData = [
-                        'id' => $correctAnswer->id,
+                        'uuid' => $correctAnswer->uuid,
                         'answer_text' => $correctAnswer->answer_text,
                         'order' => $correctAnswer->order,
                     ];
@@ -718,7 +718,7 @@ class ExamAttemptController extends Controller
                 $userAnswerData = null;
                 if ($userAnswer && $userAnswer->answer) {
                     $userAnswerData = [
-                        'id' => $userAnswer->answer->id,
+                        'uuid' => $userAnswer->answer->uuid,
                         'answer_text' => $userAnswer->answer->answer_text,
                         'order' => $userAnswer->answer->order ?? null,
                     ];
@@ -728,7 +728,7 @@ class ExamAttemptController extends Controller
                 $questionAnswers = null;
                 if (in_array($question->question_type, ['multiple_choice', 'true_false'])) {
                     $questionAnswers = $question->answers->map(fn ($a) => [
-                        'id' => $a->id,
+                        'uuid' => $a->uuid,
                         'answer_text' => $a->answer_text,
                         'order' => $a->order,
                         'is_correct' => $a->is_correct,
@@ -737,7 +737,7 @@ class ExamAttemptController extends Controller
 
                 return [
                     'question' => [
-                        'id' => $question->id,
+                        'uuid' => $question->uuid,
                         'question_text' => $question->question_text,
                         'question_type' => $question->question_type,
                         'explanation' => $question->explanation,
@@ -805,7 +805,7 @@ class ExamAttemptController extends Controller
             'success' => true,
             'data' => [
                 'attempt' => [
-                    'id' => $attempt->id,
+                    'uuid' => $attempt->uuid,
                     'score' => $attempt->score,
                     'correct_answers' => $attempt->correct_answers,
                     'total_questions' => $attempt->total_questions,
@@ -852,15 +852,13 @@ class ExamAttemptController extends Controller
             ->orderBy('completed_at', 'desc')
             ->limit(5)
             ->get()
-            ->map(function ($attempt) {
-                return [
-                    'id' => $attempt->id,
-                    'exam_title' => $attempt->exam ? $attempt->exam->title : "Practice Session",
-                    'score' => $attempt->score,
-                    'percentage' => $attempt->percentage,
-                    'completed_at' => $attempt->completed_at,
-                ];
-            });
+            ->map(fn ($attempt) => [
+                'uuid' => $attempt->uuid,
+                'exam_title' => $attempt->exam ? $attempt->exam->title : 'Practice Session',
+                'score' => $attempt->score,
+                'percentage' => $attempt->percentage,
+                'completed_at' => $attempt->completed_at,
+            ]);
 
         $subjectPerformance = ExamAttempt::where('user_id', $userId)
             ->where('status', 'completed')
@@ -885,5 +883,67 @@ class ExamAttemptController extends Controller
                 'subject_performance' => $subjectPerformance,
             ],
         ]);
+    }
+
+    /**
+     * Resolve a multiple-choice or true/false answer from UUID or text (including virtual UI ids).
+     */
+    private function resolveChoiceAnswer(Question $question, ?string $answerUuid, ?string $answerText): ?Answer
+    {
+        if ($answerUuid && !str_starts_with($answerUuid, 'virtual-')) {
+            $existing = Answer::where('uuid', $answerUuid)
+                ->where('question_id', $question->id)
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        $choiceText = $answerText;
+        if (!$choiceText && $answerUuid) {
+            if (str_contains($answerUuid, 'virtual-true')) {
+                $choiceText = 'True';
+            } elseif (str_contains($answerUuid, 'virtual-false')) {
+                $choiceText = 'False';
+            }
+        }
+
+        if (!$choiceText) {
+            return null;
+        }
+
+        $normalizedChoice = trim($choiceText);
+        $existingByText = $question->answers()
+            ->whereRaw('LOWER(TRIM(answer_text)) = ?', [strtolower($normalizedChoice)])
+            ->first();
+
+        if ($existingByText) {
+            return $existingByText;
+        }
+
+        if ($question->question_type !== 'true_false') {
+            return null;
+        }
+
+        $expected = strtolower(trim($question->expected_answer ?? ''));
+        $choiceLower = strtolower($normalizedChoice);
+        $isCorrect = false;
+
+        if (in_array($expected, ['true', '1', 'yes'], true)) {
+            $isCorrect = in_array($choiceLower, ['true', '1', 'yes'], true);
+        } elseif (in_array($expected, ['false', '0', 'no'], true)) {
+            $isCorrect = in_array($choiceLower, ['false', '0', 'no'], true);
+        } else {
+            $isCorrect = $choiceLower === $expected;
+        }
+
+        return $question->answers()->firstOrCreate(
+            ['answer_text' => $normalizedChoice],
+            [
+                'is_correct' => $isCorrect,
+                'order' => $choiceLower === 'true' ? 'A' : 'B',
+            ]
+        );
     }
 }
