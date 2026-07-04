@@ -54,11 +54,20 @@ interface ExamCategory {
     flow_type: 'standard' | 'departmental';
 }
 
+interface PastQuestionExam {
+    id: number;
+    title: string;
+    subject: string | null;
+    year: number | null;
+    exam_type: string;
+}
+
 interface Props {
     subjects: Subject[];
     departments: Department[];
     subjectTests: SubjectTest[];
     examCategories: ExamCategory[];
+    pastQuestionExams: PastQuestionExam[];
     defaults?: {
         subject_id: string;
         department_id: number | null;
@@ -76,6 +85,7 @@ export default function CreateQuestion({
     departments,
     subjectTests,
     examCategories,
+    pastQuestionExams,
     defaults = { subject_id: '', department_id: null, exam_types: [] },
 }: Props) {
     const { data, setData, post, processing, errors } = useForm({
@@ -92,6 +102,7 @@ export default function CreateQuestion({
         expected_answer: '',
         exam_types: defaults.exam_types,
         test_ids: [] as number[],
+        exam_ids: [] as number[],
         answers: [
             { answer_text: '', is_correct: false, order: 'A' },
             { answer_text: '', is_correct: false, order: 'B' },
@@ -106,6 +117,14 @@ export default function CreateQuestion({
     const selectedCategories = examCategories.filter((cat) =>
         effectiveExamTypes.includes(cat.slug),
     );
+    const hasStandardFlow = selectedCategories.some(
+        (cat) => cat.flow_type === 'standard',
+    );
+
+    const examsForSubject = selectedSubject
+        ? pastQuestionExams.filter((pastExam) => pastExam.subject === selectedSubject.name)
+        : [];
+
     const hasDepartmentalFlow = selectedCategories.some(
         (cat) => cat.flow_type === 'departmental',
     );
@@ -123,6 +142,7 @@ export default function CreateQuestion({
 
         setData('subject_id', subjectId);
         setData('test_ids', []);
+        setData('exam_ids', []);
         setData('exam_types', subject?.exam_types ?? []);
         if (subject?.department_id) {
             setData('department_id', subject.department_id);
@@ -351,6 +371,37 @@ export default function CreateQuestion({
                                         Assign this question to one or more tests for departmental practice.
                                     </p>
                                     <InputError message={(errors as any).test_ids} />
+                                </div>
+                            )}
+
+                            {hasStandardFlow && data.subject_id && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="exam_ids">Past Question Years (optional)</Label>
+                                    {examsForSubject.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground py-2">
+                                            No past question papers yet for this subject.
+                                        </p>
+                                    ) : (
+                                        <MultiSelect
+                                            id="exam_ids"
+                                            options={examsForSubject.map((pastExam) => ({
+                                                value: String(pastExam.id),
+                                                label: `${pastExam.title}${pastExam.year ? ` (${pastExam.year})` : ''}`,
+                                            }))}
+                                            value={data.exam_ids.map(String)}
+                                            onChange={(values) =>
+                                                setData(
+                                                    'exam_ids',
+                                                    values.map((value) => parseInt(value, 10)),
+                                                )
+                                            }
+                                            placeholder="Select past question years"
+                                        />
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                        Link this question to one or more past question papers.
+                                    </p>
+                                    <InputError message={(errors as any).exam_ids} />
                                 </div>
                             )}
 

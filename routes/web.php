@@ -62,7 +62,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/{question}/edit', [App\Http\Controllers\Admin\ExamQuestionController::class, 'edit'])->name('edit');
                 Route::patch('/{question}', [App\Http\Controllers\Admin\ExamQuestionController::class, 'update'])->name('update');
                 Route::delete('/{question}', [App\Http\Controllers\Admin\ExamQuestionController::class, 'destroy'])->name('destroy');
-                Route::post('/{question}/duplicate', [App\Http\Controllers\Admin\ExamQuestionController::class, 'duplicate'])->name('duplicate');
+                Route::post('/{question}/link', [App\Http\Controllers\Admin\ExamQuestionController::class, 'link'])->name('link');
                 Route::get('/sample', [App\Http\Controllers\Admin\ExamQuestionController::class, 'downloadSample'])->name('sample');
                 Route::post('/bulk-upload', [App\Http\Controllers\Admin\ExamQuestionController::class, 'bulkUpload'])->name('bulkUpload');
             });

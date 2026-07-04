@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Exam;
 use App\Models\Subject;
 use App\Models\SubjectTest;
 use App\Models\Question;
@@ -19,7 +20,7 @@ class QuestionController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Question::with(['subject', 'exam', 'answers']);
+        $query = Question::with(['subject', 'exams', 'answers']);
 
         // Search
         if ($request->has('search')) {
@@ -39,6 +40,13 @@ class QuestionController extends Controller
         // Filter by question type
         if ($request->has('question_type') && $request->question_type !== 'all') {
             $query->where('question_type', $request->question_type);
+        }
+
+        // Filter by past question paper
+        if ($request->filled('exam_id') && $request->exam_id !== 'all') {
+            $query->whereHas('exams', function ($q) use ($request) {
+                $q->where('exams.id', $request->exam_id);
+            });
         }
 
         // Filter by active status
@@ -103,6 +111,7 @@ class QuestionController extends Controller
             'departments' => $departments,
             'subjectTests' => $subjectTests,
             'examCategories' => $examCategories,
+            'pastQuestionExams' => $this->pastQuestionExams(),
             'defaults' => $defaults,
         ]);
     }
@@ -130,6 +139,8 @@ class QuestionController extends Controller
             'explanation' => 'nullable|string',
             'exam_types' => 'sometimes|array',
             'exam_types.*' => 'required',
+            'exam_ids' => 'nullable|array',
+            'exam_ids.*' => 'integer|exists:exams,id',
             'test_ids' => 'nullable|array',
             'test_ids.*' => 'integer|exists:subject_tests,id',
         ];
@@ -210,6 +221,8 @@ class QuestionController extends Controller
 
             $resolver->syncQuestionCategories($question, $validated['exam_types']);
 
+            $this->syncPastQuestionExams($question, $validated['exam_ids'] ?? []);
+
             // Sync subject tests for departmental categories (only tests that belong to this subject)
             if ($resolver->requiresDepartment($validated['exam_types']) && !empty($validated['test_ids'] ?? [])) {
                 $validTestIds = SubjectTest::where('subject_id', $validated['subject_id'])
@@ -260,7 +273,7 @@ class QuestionController extends Controller
      */
     public function show(Question $question)
     {
-        $question->load('answers', 'subject', 'exam');
+        $question->load('answers', 'subject', 'exams');
 
         // Ensure exam_types is an array
         if (!$question->exam_types || !is_array($question->exam_types)) {
@@ -278,7 +291,7 @@ class QuestionController extends Controller
      */
     public function edit(Question $question, ExamCategoryResolver $resolver)
     {
-        $question->load('answers', 'subject', 'subject.department', 'subjectTests');
+        $question->load('answers', 'subject', 'subject.department', 'subjectTests', 'exams:id,title,year,subject');
         $subjects = Subject::where('is_active', true)
             ->with('department:id,name')
             ->orderBy('name')
@@ -301,6 +314,7 @@ class QuestionController extends Controller
             'departments' => $departments,
             'subjectTests' => $subjectTests,
             'examCategories' => $examCategories,
+            'pastQuestionExams' => $this->pastQuestionExams(),
         ]);
     }
 
@@ -324,6 +338,8 @@ class QuestionController extends Controller
             'explanation' => 'nullable|string',
         'exam_types' => 'required|array|min:1',
         'exam_types.*' => 'required',
+        'exam_ids' => 'nullable|array',
+        'exam_ids.*' => 'integer|exists:exams,id',
     ];
 
         if ($resolver->requiresDepartment($request->input('exam_types', []))) {
@@ -402,6 +418,8 @@ class QuestionController extends Controller
         ]);
 
         $resolver->syncQuestionCategories($question, $validated['exam_types']);
+
+        $this->syncPastQuestionExams($question, $validated['exam_ids'] ?? []);
 
         // Sync subject tests for departmental categories
         if ($resolver->requiresDepartment($validated['exam_types']) && array_key_exists('test_ids', $validated)) {
@@ -795,5 +813,37 @@ class QuestionController extends Controller
                 ->withErrors(['bulk_upload' => 'No questions were imported. Please check your file format.'])
                 ->with('import_errors', $errors);
         }
+    }
+
+    private function pastQuestionExams()
+    {
+        return Exam::query()
+            ->whereNotNull('year')
+            ->orderBy('subject')
+            ->orderBy('year', 'desc')
+            ->get(['id', 'title', 'subject', 'year', 'exam_type']);
+    }
+
+    /**
+     * @param array<int|string> $examIds
+     */
+    private function syncPastQuestionExams(Question $question, array $examIds): void
+    {
+        $subjectName = $question->subject?->name;
+        if (!$subjectName) {
+            return;
+        }
+
+        $previousExamIds = $question->exams()->pluck('exams.id')->all();
+        $validExamIds = Exam::query()
+            ->whereIn('id', $examIds)
+            ->where('subject', $subjectName)
+            ->pluck('id')
+            ->all();
+
+        $question->exams()->sync($validExamIds);
+
+        $affectedExamIds = array_unique(array_merge($previousExamIds, $validExamIds));
+        Exam::whereIn('id', $affectedExamIds)->get()->each->refreshTotalQuestions();
     }
 }

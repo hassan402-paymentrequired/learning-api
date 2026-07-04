@@ -14,7 +14,6 @@ class Question extends Model
     use HasFactory, HasPublicUuid;
 
     protected $fillable = [
-        'exam_id',
         'subject_id',
         'exam_types',
         'question_text',
@@ -31,11 +30,12 @@ class Question extends Model
     ];
 
     /**
-     * Get the exam that owns the question (nullable - questions can exist independently).
+     * Past question papers this question belongs to (many-to-many).
      */
-    public function exam(): BelongsTo
+    public function exams(): BelongsToMany
     {
-        return $this->belongsTo(Exam::class);
+        return $this->belongsToMany(Exam::class, 'question_exam')
+            ->withTimestamps();
     }
 
     /**

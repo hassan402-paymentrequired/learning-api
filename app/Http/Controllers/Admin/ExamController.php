@@ -95,10 +95,10 @@ class ExamController extends Controller
      */
     public function show(Exam $exam)
     {
-        $exam->load(['questions.answers']);
+        $exam->load(['questions.answers', 'questions.exams:id,title,year']);
 
-        // Other exams of same subject (different years) for question duplicating
-        $targetExams = Exam::where('exam_type', $exam->exam_type)
+        // Other exams of same subject (different years) for linking questions
+        $relatedExams = Exam::where('exam_type', $exam->exam_type)
             ->where('id', '!=', $exam->id)
             ->when($exam->subject, fn ($q) => $q->where('subject', $exam->subject))
             ->orderBy('year', 'desc')
@@ -106,7 +106,7 @@ class ExamController extends Controller
 
         return Inertia::render('admin/exams/show', [
             'exam' => $exam,
-            'targetExams' => $targetExams,
+            'relatedExams' => $relatedExams,
             'import_errors' => session('import_errors', []),
         ]);
     }
@@ -193,24 +193,11 @@ class ExamController extends Controller
         $newExam->total_questions = 0;
         $newExam->save();
 
-        // Duplicate questions and answers
-        foreach ($exam->questions as $question) {
-            $newQuestion = $question->replicate();
-            $newQuestion->exam_id = $newExam->id;
-            $newQuestion->save();
-
-            // Duplicate answers
-            foreach ($question->answers as $answer) {
-                $newAnswer = $answer->replicate();
-                $newAnswer->question_id = $newQuestion->id;
-                $newAnswer->save();
-            }
-        }
+        // Duplicate questions and answers — link same questions to the new paper
+        $newExam->questions()->attach($exam->questions()->pluck('questions.id')->all());
 
         // Update total questions count
-        $newExam->update([
-            'total_questions' => $newExam->questions()->count(),
-        ]);
+        $newExam->refreshTotalQuestions();
 
         return redirect()->route('admin.exams.show', $newExam)
             ->with('success', 'Exam duplicated successfully.');

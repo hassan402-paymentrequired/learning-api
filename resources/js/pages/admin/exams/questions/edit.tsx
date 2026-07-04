@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, useForm } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
@@ -42,13 +43,22 @@ interface Subject {
     name: string;
 }
 
+interface RelatedExam {
+    id: number;
+    title: string;
+    subject: string | null;
+    year: number | null;
+}
+
 interface Props {
     exam: Exam;
     question: Question;
     subjects: Subject[];
+    relatedExams?: RelatedExam[];
+    linkedExamIds?: number[];
 }
 
-export default function EditExamQuestion({ exam, question, subjects }: Props) {
+export default function EditExamQuestion({ exam, question, subjects, relatedExams = [], linkedExamIds = [] }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Exams', href: admin.exams.index().url },
         { title: exam.title, href: admin.exams.show(exam.id).url },
@@ -67,6 +77,7 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
             is_correct: a.is_correct,
             order: a.order,
         })),
+        exam_ids: linkedExamIds.filter((id) => id !== exam.id),
     });
 
     const addAnswer = () => {
@@ -151,6 +162,33 @@ export default function EditExamQuestion({ exam, question, subjects }: Props) {
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={submit} className="space-y-6">
+                            {relatedExams.length > 0 && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="exam_ids">Also appear in these years</Label>
+                                    <MultiSelect
+                                        id="exam_ids"
+                                        options={relatedExams
+                                            .filter((relatedExam) => relatedExam.id !== exam.id)
+                                            .map((relatedExam) => ({
+                                                value: String(relatedExam.id),
+                                                label: `${relatedExam.title}${relatedExam.year ? ` (${relatedExam.year})` : ''}`,
+                                            }))}
+                                        value={data.exam_ids.map(String)}
+                                        onChange={(values) =>
+                                            setData(
+                                                'exam_ids',
+                                                values.map((value) => parseInt(value, 10)),
+                                            )
+                                        }
+                                        placeholder="Select additional past question years"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        This paper ({exam.year ?? exam.title}) is always included.
+                                    </p>
+                                    <InputError message={(errors as any).exam_ids} />
+                                </div>
+                            )}
+
                             <div className="grid gap-2">
                                 <Label htmlFor="question_text">Question Text *</Label>
                                 <Textarea

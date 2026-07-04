@@ -7,6 +7,7 @@ use App\Models\Exam;
 use App\Models\Question;
 use App\Models\Subject;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -19,10 +20,12 @@ class ExamQuestionController extends Controller
     public function create(Exam $exam)
     {
         $subjects = Subject::where('is_active', true)->orderBy('name')->get();
+        $relatedExams = $this->relatedExamsFor($exam);
 
         return Inertia::render('admin/exams/questions/create', [
             'exam' => $exam,
             'subjects' => $subjects,
+            'relatedExams' => $relatedExams,
         ]);
     }
 
@@ -36,19 +39,18 @@ class ExamQuestionController extends Controller
             'data' => $request->all(),
         ]);
 
-        // First validate question_type to determine conditional rules
         $request->validate([
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
         ]);
 
-        // Base validation rules
         $rules = [
             'question_text' => 'required|string',
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
+            'exam_ids' => 'nullable|array',
+            'exam_ids.*' => 'integer|exists:exams,id',
         ];
 
-        // Conditional validation based on question type
         if ($request->question_type === 'multiple_choice') {
             $rules['answers'] = 'required|array|min:2';
             $rules['answers.*.answer_text'] = 'required|string';
@@ -56,23 +58,20 @@ class ExamQuestionController extends Controller
             $rules['answers.*.order'] = 'required|string|in:A,B,C,D,E';
         } else {
             $rules['expected_answer'] = 'required|string';
-            // answers may be sent by frontend for other types; we ignore it
         }
 
         $validated = $request->validate($rules);
 
         try {
-            // Handle image upload
             $imagePath = null;
             if ($request->hasFile('image')) {
                 $imagePath = $request->file('image')->store('questions', 'public');
             }
 
-            // Determine exam_types from exam
             $examTypes = [$exam->exam_type];
+            $examIds = $this->resolveExamIds($exam, $validated['exam_ids'] ?? []);
 
             $question = Question::create([
-                'exam_id' => $exam->id,
                 'subject_id' => $exam->subject ? Subject::where('name', $exam->subject)->first()?->id : null,
                 'question_text' => $validated['question_text'],
                 'image' => $imagePath,
@@ -83,10 +82,8 @@ class ExamQuestionController extends Controller
                 'is_active' => true,
             ]);
 
-            Log::info('Exam question created successfully', [
-                'question_id' => $question->id,
-                'exam_id' => $exam->id,
-            ]);
+            $question->exams()->attach($examIds);
+            $this->refreshExamTotals($examIds);
 
             if ($validated['question_type'] === 'multiple_choice') {
                 foreach ($validated['answers'] as $answerData) {
@@ -97,11 +94,6 @@ class ExamQuestionController extends Controller
                     ]);
                 }
             }
-
-            // Update exam total_questions
-            $exam->update([
-                'total_questions' => $exam->questions()->count(),
-            ]);
 
             return redirect()->route('admin.exams.show', $exam)
                 ->with('success', 'Question created successfully.');
@@ -121,18 +113,18 @@ class ExamQuestionController extends Controller
      */
     public function edit(Exam $exam, Question $question)
     {
-        // Ensure question belongs to exam
-        if ($question->exam_id !== $exam->id) {
-            abort(404);
-        }
+        $this->ensureQuestionLinkedToExam($exam, $question);
 
-        $question->load('answers');
+        $question->load(['answers', 'exams:id,title,year,subject']);
         $subjects = Subject::where('is_active', true)->orderBy('name')->get();
+        $relatedExams = $this->relatedExamsFor($exam);
 
         return Inertia::render('admin/exams/questions/edit', [
             'exam' => $exam,
             'question' => $question,
             'subjects' => $subjects,
+            'relatedExams' => $relatedExams,
+            'linkedExamIds' => $question->exams->pluck('id')->all(),
         ]);
     }
 
@@ -141,24 +133,20 @@ class ExamQuestionController extends Controller
      */
     public function update(Request $request, Exam $exam, Question $question)
     {
-        // Ensure question belongs to exam
-        if ($question->exam_id !== $exam->id) {
-            abort(404);
-        }
+        $this->ensureQuestionLinkedToExam($exam, $question);
 
-        // First validate question_type to determine conditional rules
         $request->validate([
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
         ]);
 
-        // Base validation rules
         $rules = [
             'question_text' => 'required|string',
             'question_type' => 'required|in:multiple_choice,text_input,numeric_input,true_false',
             'explanation' => 'nullable|string',
+            'exam_ids' => 'nullable|array',
+            'exam_ids.*' => 'integer|exists:exams,id',
         ];
 
-        // Conditional validation based on question type
         if ($request->question_type === 'multiple_choice') {
             $rules['answers'] = 'required|array|min:2';
             $rules['answers.*.id'] = 'nullable|exists:answers,id';
@@ -167,26 +155,21 @@ class ExamQuestionController extends Controller
             $rules['answers.*.order'] = 'required|string|in:A,B,C,D,E';
         } else {
             $rules['expected_answer'] = 'required|string';
-            // answers may be sent by frontend for other types; we ignore it
         }
 
         $validated = $request->validate($rules);
 
         try {
-            // Handle image upload
             if ($request->hasFile('image')) {
-                // Delete old image if exists
                 if ($question->image) {
                     Storage::disk('public')->delete($question->image);
                 }
                 $imagePath = $request->file('image')->store('questions', 'public');
                 $validated['image'] = $imagePath;
             } else {
-                // Keep existing image if no new image uploaded
                 $validated['image'] = $question->image;
             }
 
-            // Update question
             $question->update([
                 'question_text' => $validated['question_text'],
                 'image' => $validated['image'],
@@ -195,28 +178,30 @@ class ExamQuestionController extends Controller
                 'expected_answer' => $validated['expected_answer'] ?? null,
             ]);
 
-            // Handle answers for multiple choice
+            if (array_key_exists('exam_ids', $validated)) {
+                $previousExamIds = $question->exams()->pluck('exams.id')->all();
+                $examIds = $this->resolveExamIds($exam, $validated['exam_ids'] ?? []);
+                $question->exams()->sync($examIds);
+                $this->refreshExamTotals(array_unique(array_merge($previousExamIds, $examIds)));
+            }
+
             if ($validated['question_type'] === 'multiple_choice') {
                 $existingAnswerIds = $question->answers()->pluck('id')->toArray();
                 $submittedAnswerIds = array_filter(array_column($validated['answers'], 'id'));
 
-                // Delete answers that were removed
                 $answersToDelete = array_diff($existingAnswerIds, $submittedAnswerIds);
                 if (!empty($answersToDelete)) {
                     $question->answers()->whereIn('id', $answersToDelete)->delete();
                 }
 
-                // Update or create answers
                 foreach ($validated['answers'] as $answerData) {
                     if (isset($answerData['id']) && in_array($answerData['id'], $existingAnswerIds)) {
-                        // Update existing answer
                         $question->answers()->where('id', $answerData['id'])->update([
                             'answer_text' => $answerData['answer_text'],
                             'is_correct' => $answerData['is_correct'],
                             'order' => $answerData['order'],
                         ]);
                     } else {
-                        // Create new answer
                         $question->answers()->create([
                             'answer_text' => $answerData['answer_text'],
                             'is_correct' => $answerData['is_correct'],
@@ -225,7 +210,6 @@ class ExamQuestionController extends Controller
                     }
                 }
             } else {
-                // Delete all answers for non-multiple-choice questions
                 $question->answers()->delete();
             }
 
@@ -243,78 +227,39 @@ class ExamQuestionController extends Controller
     }
 
     /**
-     * Remove a question from an exam.
+     * Remove a question from this past question paper (detach, not delete).
      */
     public function destroy(Exam $exam, Question $question)
     {
-        // Ensure question belongs to exam
-        if ($question->exam_id !== $exam->id) {
-            abort(404);
-        }
+        $this->ensureQuestionLinkedToExam($exam, $question);
 
-        // Delete image if exists
-        if ($question->image) {
-            Storage::disk('public')->delete($question->image);
-        }
-
-        $question->delete();
-
-        // Update exam total_questions
-        $exam->update([
-            'total_questions' => $exam->questions()->count(),
-        ]);
+        $question->exams()->detach($exam->id);
+        $exam->refreshTotalQuestions();
 
         return redirect()->route('admin.exams.show', $exam)
-            ->with('success', 'Question deleted successfully.');
+            ->with('success', 'Question removed from this past question paper.');
     }
 
     /**
-     * Duplicate a question to another exam (e.g. same subject, different year).
+     * Link a question to additional past question papers (same subject).
      */
-    public function duplicate(Request $request, Exam $exam, Question $question)
+    public function link(Request $request, Exam $exam, Question $question)
     {
-        $request->validate([
-            'target_exam_id' => 'required|exists:exams,id',
+        $this->ensureQuestionLinkedToExam($exam, $question);
+
+        $validated = $request->validate([
+            'exam_ids' => 'required|array|min:1',
+            'exam_ids.*' => 'integer|exists:exams,id',
         ]);
 
-        $targetExam = Exam::findOrFail($request->target_exam_id);
+        $examIds = $this->resolveExamIds($exam, $validated['exam_ids']);
+        $previousExamIds = $question->exams()->pluck('exams.id')->all();
 
-        if ($targetExam->id === $exam->id) {
-            return back()->withErrors(['target_exam_id' => 'Cannot duplicate to the same exam.']);
-        }
+        $question->exams()->sync($examIds);
+        $this->refreshExamTotals(array_unique(array_merge($previousExamIds, $examIds)));
 
-        // Ensure question belongs to source exam
-        if ($question->exam_id !== $exam->id) {
-            abort(404);
-        }
-
-        // Optional: ensure same subject for past questions (e.g. English 2024 -> English 2023)
-        if ($exam->subject && $targetExam->subject && $exam->subject !== $targetExam->subject) {
-            return back()->withErrors(['target_exam_id' => 'Target exam must be the same subject (' . $exam->subject . ').']);
-        }
-
-        $question->load('answers');
-
-        $newQuestion = $question->replicate();
-        $newQuestion->exam_id = $targetExam->id;
-        $newQuestion->subject_id = $targetExam->subject
-            ? Subject::where('name', $targetExam->subject)->first()?->id
-            : $question->subject_id;
-        $newQuestion->exam_types = [$targetExam->exam_type];
-        $newQuestion->save();
-
-        foreach ($question->answers as $answer) {
-            $newAnswer = $answer->replicate();
-            $newAnswer->question_id = $newQuestion->id;
-            $newAnswer->save();
-        }
-
-        $targetExam->update([
-            'total_questions' => $targetExam->questions()->count(),
-        ]);
-
-        return redirect()->route('admin.exams.show', $targetExam)
-            ->with('success', 'Question duplicated successfully to ' . $targetExam->title . '.');
+        return redirect()->route('admin.exams.show', $exam)
+            ->with('success', 'Question linked to selected past question papers.');
     }
 
     /**
@@ -331,10 +276,9 @@ class ExamQuestionController extends Controller
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ];
 
-        $callback = function () use ($questionType, $exam) {
+        $callback = function () use ($questionType) {
             $file = fopen('php://output', 'w');
 
-            // Add BOM for Excel compatibility
             fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
             if ($questionType === 'text_input' || $questionType === 'numeric_input') {
@@ -407,7 +351,6 @@ class ExamQuestionController extends Controller
         $file = $request->file('file');
         $handle = fopen($file->getRealPath(), 'r');
 
-        // Skip BOM if present
         $firstLine = fgets($handle);
         if (substr($firstLine, 0, 3) !== "\xEF\xBB\xBF") {
             rewind($handle);
@@ -415,8 +358,7 @@ class ExamQuestionController extends Controller
             fseek($handle, 3);
         }
 
-        // Skip header row
-        $header = fgetcsv($handle);
+        fgetcsv($handle);
 
         $imported = 0;
         $errors = [];
@@ -425,7 +367,6 @@ class ExamQuestionController extends Controller
         while (($row = fgetcsv($handle)) !== false) {
             $rowNumber++;
 
-            // Skip empty rows
             if (empty(array_filter($row))) {
                 continue;
             }
@@ -459,7 +400,6 @@ class ExamQuestionController extends Controller
                     }
 
                     $question = Question::create([
-                        'exam_id' => $exam->id,
                         'subject_id' => $exam->subject ? Subject::where('name', $exam->subject)->first()?->id : null,
                         'question_text' => $questionText,
                         'question_type' => 'multiple_choice',
@@ -467,6 +407,8 @@ class ExamQuestionController extends Controller
                         'exam_types' => [$exam->exam_type],
                         'is_active' => true,
                     ]);
+
+                    $question->exams()->attach($exam->id);
 
                     $answers = [
                         ['text' => $answerA, 'order' => 'A', 'correct' => $correctAnswer === 'A'],
@@ -495,7 +437,6 @@ class ExamQuestionController extends Controller
                     }
 
                     $question = Question::create([
-                        'exam_id' => $exam->id,
                         'subject_id' => $exam->subject ? Subject::where('name', $exam->subject)->first()?->id : null,
                         'question_text' => $questionText,
                         'question_type' => $questionType,
@@ -504,6 +445,8 @@ class ExamQuestionController extends Controller
                         'exam_types' => [$exam->exam_type],
                         'is_active' => true,
                     ]);
+
+                    $question->exams()->attach($exam->id);
                 }
 
                 $imported++;
@@ -518,19 +461,73 @@ class ExamQuestionController extends Controller
 
         fclose($handle);
 
-        // Update exam total_questions
-        $exam->update([
-            'total_questions' => $exam->questions()->count(),
-        ]);
+        $exam->refreshTotalQuestions();
 
         if ($imported > 0) {
             return redirect()->route('admin.exams.show', $exam)
                 ->with('success', "Successfully imported {$imported} question(s).")
                 ->with('import_errors', $errors);
-        } else {
-            return redirect()->route('admin.exams.show', $exam)
-                ->withErrors(['bulk_upload' => 'No questions were imported. Please check your file format.'])
-                ->with('import_errors', $errors);
         }
+
+        return redirect()->route('admin.exams.show', $exam)
+            ->withErrors(['bulk_upload' => 'No questions were imported. Please check your file format.'])
+            ->with('import_errors', $errors);
+    }
+
+    private function ensureQuestionLinkedToExam(Exam $exam, Question $question): void
+    {
+        if (!$question->exams()->where('exams.id', $exam->id)->exists()) {
+            abort(404);
+        }
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function resolveExamIds(Exam $exam, array $requestedExamIds): array
+    {
+        $examIds = collect($requestedExamIds)
+            ->map(fn ($id) => (int) $id)
+            ->push($exam->id)
+            ->unique()
+            ->values();
+
+        $exams = Exam::whereIn('id', $examIds)->get(['id', 'subject']);
+
+        if ($exams->count() !== $examIds->count()) {
+            throw ValidationException::withMessages([
+                'exam_ids' => 'One or more past question papers could not be found.',
+            ]);
+        }
+
+        foreach ($exams as $targetExam) {
+            if ($exam->subject && $targetExam->subject && $exam->subject !== $targetExam->subject) {
+                throw ValidationException::withMessages([
+                    'exam_ids' => 'All past question papers must be for the same subject (' . $exam->subject . ').',
+                ]);
+            }
+        }
+
+        return $examIds->all();
+    }
+
+    /**
+     * @param array<int> $examIds
+     */
+    private function refreshExamTotals(array $examIds): void
+    {
+        Exam::whereIn('id', $examIds)->get()->each->refreshTotalQuestions();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Exam>
+     */
+    private function relatedExamsFor(Exam $exam)
+    {
+        return Exam::query()
+            ->where('exam_type', $exam->exam_type)
+            ->when($exam->subject, fn ($q) => $q->where('subject', $exam->subject))
+            ->orderBy('year', 'desc')
+            ->get(['id', 'title', 'subject', 'year']);
     }
 }

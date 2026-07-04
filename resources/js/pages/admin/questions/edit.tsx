@@ -63,12 +63,21 @@ interface ExamCategory {
     flow_type: 'standard' | 'departmental';
 }
 
+interface PastQuestionExam {
+    id: number;
+    title: string;
+    subject: string | null;
+    year: number | null;
+    exam_type: string;
+}
+
 interface Props {
     question: Question;
     subjects: Subject[];
     departments: Department[];
     subjectTests: SubjectTest[];
     examCategories: ExamCategory[];
+    pastQuestionExams: PastQuestionExam[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -76,7 +85,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Edit Question', href: '#' },
 ];
 
-export default function EditQuestion({ question, subjects, departments, subjectTests, examCategories }: Props) {
+export default function EditQuestion({ question, subjects, departments, subjectTests, examCategories, pastQuestionExams }: Props) {
     const initialDepartmentId =
         question.subject?.department_id ??
         subjects.find((s) => s.id === question.subject_id)?.department_id ??
@@ -100,10 +109,17 @@ export default function EditQuestion({ question, subjects, departments, subjectT
             order: a.order,
         })),
         test_ids: ((question as any).subject_tests ?? (question as any).subjectTests ?? []).map((t: { id: number }) => t.id),
+        exam_ids: ((question as any).exams ?? []).map((pastExam: { id: number }) => pastExam.id),
     });
 
     const selectedCategories = examCategories.filter(cat => data.exam_types.includes(cat.slug));
+    const hasStandardFlow = selectedCategories.some(cat => cat.flow_type === 'standard');
     const hasDepartmentalFlow = selectedCategories.some(cat => cat.flow_type === 'departmental');
+
+    const selectedSubject = subjects.find((subject) => subject.id.toString() === data.subject_id);
+    const examsForSubject = selectedSubject
+        ? pastQuestionExams.filter((pastExam) => pastExam.subject === selectedSubject.name)
+        : [];
 
     const filteredSubjects = hasDepartmentalFlow && data.department_id
         ? subjects.filter(subject => subject.department_id === data.department_id)
@@ -302,6 +318,37 @@ export default function EditQuestion({ question, subjects, departments, subjectT
                                         Assign this question to one or more tests for departmental practice.
                                     </p>
                                     <InputError message={(errors as any).test_ids} />
+                                </div>
+                            )}
+
+                            {hasStandardFlow && data.subject_id && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="exam_ids">Past Question Years (optional)</Label>
+                                    {examsForSubject.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground py-2">
+                                            No past question papers yet for this subject.
+                                        </p>
+                                    ) : (
+                                        <MultiSelect
+                                            id="exam_ids"
+                                            options={examsForSubject.map((pastExam) => ({
+                                                value: String(pastExam.id),
+                                                label: `${pastExam.title}${pastExam.year ? ` (${pastExam.year})` : ''}`,
+                                            }))}
+                                            value={data.exam_ids.map(String)}
+                                            onChange={(values) =>
+                                                setData(
+                                                    'exam_ids',
+                                                    values.map((value) => parseInt(value, 10)),
+                                                )
+                                            }
+                                            placeholder="Select past question years"
+                                        />
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                        Link this question to one or more past question papers.
+                                    </p>
+                                    <InputError message={(errors as any).exam_ids} />
                                 </div>
                             )}
 

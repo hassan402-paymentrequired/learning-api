@@ -79,7 +79,7 @@ class SubjectController extends Controller
         $subject->loadCount('questions');
         
         $questions = \App\Models\Question::where('subject_id', $subject->id)
-            ->with(['subject', 'exam', 'answers'])
+            ->with(['subject', 'exams', 'answers'])
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 

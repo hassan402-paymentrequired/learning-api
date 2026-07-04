@@ -65,7 +65,6 @@ class ExamSeeder extends Seeder
                     
                     $question = Question::create([
                         'subject_id' => $subject->id,
-                        'exam_id' => null, // Standalone practice question
                         'question_text' => $data['question'],
                         'question_type' => 'multiple_choice',
                         'explanation' => $data['explanation'] ?? "This is the correct answer because {$data['correct_answer']}.",
@@ -165,7 +164,6 @@ class ExamSeeder extends Seeder
             $data = $questionData[$questionIndex];
             
             $question = Question::create([
-                'exam_id' => $exam->id,
                 'subject_id' => $subject->id,
                 'question_text' => $data['question'],
                 'question_type' => 'multiple_choice',
@@ -174,6 +172,8 @@ class ExamSeeder extends Seeder
                 'points' => 1,
                 'order' => $i,
             ]);
+
+            $question->exams()->attach($exam->id);
 
             // Create answers
             $correctIndex = array_search($data['correct_answer'], $data['options']);

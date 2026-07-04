@@ -157,7 +157,7 @@ class ExamAttemptController extends Controller
             }
 
             if ($year) {
-                $query->whereHas('exam', function ($q) use ($year) {
+                $query->whereHas('exams', function ($q) use ($year) {
                     $q->where('year', $year);
                 });
             }
@@ -690,7 +690,7 @@ class ExamAttemptController extends Controller
         $userAnswers = $attempt->userAnswers()->get()->keyBy('question_id');
         
         $results = Question::whereIn('id', $assignedQuestionIds)
-            ->with(['answers', 'subject', 'exam'])
+            ->with(['answers', 'subject', 'exams'])
             ->get()
             ->map(function ($question) use ($userAnswers) {
                 $userAnswer = $userAnswers->get($question->id);
@@ -743,7 +743,7 @@ class ExamAttemptController extends Controller
                         'explanation' => $question->explanation,
                         'expected_answer' => $question->expected_answer,
                         'image' => $question->image,
-                        'subject' => $question->subject->name ?? ($question->exam->subject ?? null),
+                        'subject' => $question->subject->name ?? $question->exams->first()?->subject,
                         'answers' => $questionAnswers,
                     ],
                     'user_answer' => $userAnswerData,

@@ -25,6 +25,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import admin from '@/routes/admin';
 import { type BreadcrumbItem } from '@/types';
@@ -35,6 +36,7 @@ import {
     Copy,
     Download,
     Edit,
+    Link2,
     Plus,
     Trash2,
     Upload,
@@ -56,6 +58,7 @@ interface Question {
     points: number;
     order: number;
     answers: Answer[];
+    exams?: Array<{ id: number; title: string; year: number | null }>;
 }
 
 interface Exam {
@@ -70,7 +73,7 @@ interface Exam {
     questions: Question[];
 }
 
-interface TargetExam {
+interface RelatedExam {
     id: number;
     title: string;
     subject: string | null;
@@ -79,7 +82,7 @@ interface TargetExam {
 
 interface Props {
     exam: Exam;
-    targetExams?: TargetExam[];
+    relatedExams?: RelatedExam[];
     import_errors?: string[];
 }
 
@@ -88,12 +91,12 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Details', href: '#' },
 ];
 
-export default function ShowExam({ exam, targetExams = [], import_errors = [] }: Props) {
+export default function ShowExam({ exam, relatedExams = [], import_errors = [] }: Props) {
     const [uploadErrors, setUploadErrors] = useState<string[]>(import_errors);
-    const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
-    const [questionToDuplicate, setQuestionToDuplicate] = useState<Question | null>(null);
-    const [duplicateTargetExamId, setDuplicateTargetExamId] = useState<string>('');
-    const [duplicateSubmitting, setDuplicateSubmitting] = useState(false);
+    const [linkModalOpen, setLinkModalOpen] = useState(false);
+    const [questionToLink, setQuestionToLink] = useState<Question | null>(null);
+    const [linkExamIds, setLinkExamIds] = useState<string[]>([]);
+    const [linkSubmitting, setLinkSubmitting] = useState(false);
     const [questionType, setQuestionType] = useState<
         'multiple_choice' | 'text_input'
     >('multiple_choice');
@@ -108,38 +111,43 @@ export default function ShowExam({ exam, targetExams = [], import_errors = [] }:
         question_type: 'multiple_choice' as 'multiple_choice' | 'text_input',
     });
 
-    const handleDelete = (questionId: number) => {
-        if (confirm('Are you sure you want to delete this question?')) {
+    const handleRemove = (questionId: number) => {
+        if (confirm('Remove this question from this past question paper? It will remain available in other linked years.')) {
             router.delete(
                 admin.exams.questions.destroy({ exam: exam.id, question: questionId }).url,
             );
         }
     };
 
-    const openDuplicateModal = (question: Question) => {
-        setQuestionToDuplicate(question);
-        setDuplicateTargetExamId('');
-        setDuplicateModalOpen(true);
+    const openLinkModal = (question: Question) => {
+        setQuestionToLink(question);
+        const alreadyLinked = (question.exams ?? [])
+            .filter((linkedExam) => linkedExam.id !== exam.id)
+            .map((linkedExam) => linkedExam.id.toString());
+        setLinkExamIds(alreadyLinked);
+        setLinkModalOpen(true);
     };
 
-    const closeDuplicateModal = () => {
-        setDuplicateModalOpen(false);
-        setQuestionToDuplicate(null);
-        setDuplicateTargetExamId('');
+    const closeLinkModal = () => {
+        setLinkModalOpen(false);
+        setQuestionToLink(null);
+        setLinkExamIds([]);
     };
 
-    const confirmDuplicate = () => {
-        if (!questionToDuplicate || !duplicateTargetExamId) return;
-        setDuplicateSubmitting(true);
+    const confirmLink = () => {
+        if (!questionToLink || linkExamIds.length === 0) return;
+        setLinkSubmitting(true);
         router.post(
-            `/admin/exams/${exam.id}/questions/${questionToDuplicate.id}/duplicate`,
-            { target_exam_id: parseInt(duplicateTargetExamId, 10) },
+            `/admin/exams/${exam.id}/questions/${questionToLink.id}/link`,
+            { exam_ids: linkExamIds.map((id) => parseInt(id, 10)) },
             {
-                onFinish: () => setDuplicateSubmitting(false),
-                onSuccess: () => closeDuplicateModal(),
+                onFinish: () => setLinkSubmitting(false),
+                onSuccess: () => closeLinkModal(),
             },
         );
     };
+
+    const linkableExams = relatedExams.filter((relatedExam) => relatedExam.id !== exam.id);
 
     const handleBulkUpload = (e: React.FormEvent) => {
         e.preventDefault();
@@ -531,6 +539,18 @@ export default function ShowExam({ exam, targetExams = [], import_errors = [] }:
                                                     <CardTitle className="text-sm sm:text-base break-words">
                                                         {question.question_text}
                                                     </CardTitle>
+                                                    {(question.exams?.length ?? 0) > 0 && (
+                                                        <div className="mt-2 flex flex-wrap gap-1">
+                                                            {question.exams?.map((linkedExam) => (
+                                                                <Badge
+                                                                    key={linkedExam.id}
+                                                                    variant={linkedExam.id === exam.id ? 'default' : 'secondary'}
+                                                                >
+                                                                    {linkedExam.year ?? linkedExam.title}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="flex gap-2 shrink-0">
                                                     <Button
@@ -552,23 +572,18 @@ export default function ShowExam({ exam, targetExams = [], import_errors = [] }:
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() =>
-                                                            openDuplicateModal(question)
-                                                        }
+                                                        onClick={() => openLinkModal(question)}
                                                         className="shrink-0"
-                                                        title="Duplicate to another year"
+                                                        title="Link to other years"
                                                     >
-                                                        <Copy className="h-4 w-4" />
+                                                        <Link2 className="h-4 w-4" />
                                                     </Button>
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() =>
-                                                            handleDelete(
-                                                                question.id,
-                                                            )
-                                                        }
+                                                        onClick={() => handleRemove(question.id)}
                                                         className="shrink-0"
+                                                        title="Remove from this paper"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -633,62 +648,52 @@ export default function ShowExam({ exam, targetExams = [], import_errors = [] }:
                 </Card>
             </div>
 
-            {/* Duplicate Question Modal */}
-            <Dialog open={duplicateModalOpen} onOpenChange={(open) => !open && closeDuplicateModal()}>
+            {/* Link Question Modal */}
+            <Dialog open={linkModalOpen} onOpenChange={(open) => !open && closeLinkModal()}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Duplicate Question</DialogTitle>
+                        <DialogTitle>Link to Past Question Years</DialogTitle>
                         <DialogDescription>
-                            {questionToDuplicate ? (
+                            {questionToLink ? (
                                 <>
-                                    Copy this question to another exam (e.g. same subject, different
-                                    year). Select the target exam below.
+                                    Select additional past question papers for this question.
+                                    Edits apply everywhere it is linked.
                                 </>
                             ) : null}
                         </DialogDescription>
                     </DialogHeader>
-                    {targetExams.length === 0 ? (
+                    {linkableExams.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                            No other exams of this subject found. Create an exam for another year
-                            first.
+                            No other papers for this subject yet. Create another year first.
                         </p>
                     ) : (
                         <div className="space-y-2">
-                            <Label htmlFor="target-exam">Target exam (year)</Label>
-                            <Select
-                                value={duplicateTargetExamId}
-                                onValueChange={setDuplicateTargetExamId}
-                            >
-                                <SelectTrigger id="target-exam">
-                                    <SelectValue placeholder="Select exam to copy to..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {targetExams.map((target) => (
-                                        <SelectItem
-                                            key={target.id}
-                                            value={target.id.toString()}
-                                        >
-                                            {target.title}
-                                            {target.year ? ` (${target.year})` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Label htmlFor="link-exams">Past question papers</Label>
+                            <MultiSelect
+                                id="link-exams"
+                                options={linkableExams.map((relatedExam) => ({
+                                    value: relatedExam.id.toString(),
+                                    label: `${relatedExam.title}${relatedExam.year ? ` (${relatedExam.year})` : ''}`,
+                                }))}
+                                value={linkExamIds}
+                                onChange={setLinkExamIds}
+                                placeholder="Select years to link..."
+                            />
                         </div>
                     )}
                     <DialogFooter>
-                        <Button variant="outline" onClick={closeDuplicateModal}>
+                        <Button variant="outline" onClick={closeLinkModal}>
                             Cancel
                         </Button>
                         <Button
-                            onClick={confirmDuplicate}
+                            onClick={confirmLink}
                             disabled={
-                                !duplicateTargetExamId ||
-                                duplicateSubmitting ||
-                                targetExams.length === 0
+                                linkExamIds.length === 0 ||
+                                linkSubmitting ||
+                                linkableExams.length === 0
                             }
                         >
-                            {duplicateSubmitting ? 'Duplicating...' : 'Duplicate'}
+                            {linkSubmitting ? 'Linking...' : 'Link Question'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

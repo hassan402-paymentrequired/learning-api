@@ -47,7 +47,6 @@ class SampleQuestionsSeeder extends Seeder
 
                 $question = Question::create([
                     'subject_id' => $subject->id,
-                    'exam_id' => null,
                     'question_text' => $data['question'],
                     'question_type' => 'multiple_choice',
                     'explanation' => $data['explanation'] ?? null,
@@ -91,7 +90,6 @@ class SampleQuestionsSeeder extends Seeder
             $data = $questionData[($i - 1) % count($questionData)];
 
             $question = Question::create([
-                'exam_id' => $exam->id,
                 'subject_id' => $subject->id,
                 'question_text' => $data['question'],
                 'question_type' => 'multiple_choice',
@@ -99,6 +97,8 @@ class SampleQuestionsSeeder extends Seeder
                 'exam_types' => ['JAMB'],
                 'is_active' => true,
             ]);
+
+            $question->exams()->attach($exam->id);
 
             $this->createAnswers($question->id, $data);
         }

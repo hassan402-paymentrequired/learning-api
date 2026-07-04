@@ -377,9 +377,9 @@ export default function QuestionsIndex({ questions, subjects, examCategories, fi
                                             {question.is_active ? 'Active' : 'Inactive'}
                                         </span>
                                     </div>
-                                    {question.exam && (
+                                    {question.exams && question.exams.length > 0 && (
                                         <div className="text-sm text-muted-foreground">
-                                            Exam: {question.exam.title}
+                                            Past papers: {question.exams.map((pastExam: { title: string; year?: number | null }) => pastExam.year ?? pastExam.title).join(', ')}
                                         </div>
                                     )}
                                     {question.answers_count !== undefined && question.answers_count > 0 && (

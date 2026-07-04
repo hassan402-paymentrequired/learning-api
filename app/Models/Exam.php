@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Exam extends Model
@@ -28,11 +29,22 @@ class Exam extends Model
     ];
 
     /**
-     * Get the questions for the exam.
+     * Questions linked to this past question paper (many-to-many).
      */
-    public function questions(): HasMany
+    public function questions(): BelongsToMany
     {
-        return $this->hasMany(Question::class);
+        return $this->belongsToMany(Question::class, 'question_exam')
+            ->withTimestamps();
+    }
+
+    /**
+     * Refresh the cached total_questions count from the pivot table.
+     */
+    public function refreshTotalQuestions(): void
+    {
+        $this->update([
+            'total_questions' => $this->questions()->count(),
+        ]);
     }
 
     /**

@@ -33,11 +33,12 @@ interface Question {
         id: number;
         name: string;
     } | null;
-    exam: {
+    exams?: Array<{
         id: number;
         title: string;
-        exam_type: string;
-    };
+        exam_type?: string;
+        year?: number | null;
+    }>;
     answers_count?: number;
     answers?: Answer[];
 }
@@ -212,16 +213,17 @@ export default function QuestionsAll({ questions, exams, filters }: Props) {
                                                 </span>
                                             </div>
                                             <p className="text-sm mb-2">{question.question_text}</p>
-                                            <div className="flex items-center gap-2">
-                                                <Link
-                                                    href={admin.exams.show({ exam: question.exam.id }).url}
-                                                    className="flex items-center gap-1 text-xs text-primary hover:underline"
-                                                >
-                                                    <BookOpen className="h-3 w-3" />
-                                                    {question.exam.title}
-                                                </Link>
-                                                <span className="text-xs text-muted-foreground">•</span>
-                                                <span className="text-xs text-muted-foreground">{question.exam.exam_type}</span>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {(question.exams ?? []).map((pastExam) => (
+                                                    <Link
+                                                        key={pastExam.id}
+                                                        href={admin.exams.show({ exam: pastExam.id }).url}
+                                                        className="flex items-center gap-1 text-xs text-primary hover:underline"
+                                                    >
+                                                        <BookOpen className="h-3 w-3" />
+                                                        {pastExam.year ?? pastExam.title}
+                                                    </Link>
+                                                ))}
                                             </div>
                                         </div>
                                     </div>

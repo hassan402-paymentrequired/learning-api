@@ -26,11 +26,11 @@ interface Question {
         id: number;
         name: string;
     } | null;
-    exam: {
+    exams?: Array<{
         id: number;
         title: string;
-        exam_type: string;
-    } | null;
+        year?: number | null;
+    }>;
     answers?: Answer[];
 }
 
@@ -236,16 +236,19 @@ export default function ViewQuestionModal({ question, open, onOpenChange, onTogg
                                 </CardContent>
                             </Card>
                         )}
-                        {question.exam && (
+                        {question.exams && question.exams.length > 0 && (
                             <Card>
                                 <CardHeader>
-                                    <CardTitle className="text-sm font-medium">Exam</CardTitle>
+                                    <CardTitle className="text-sm font-medium">Past Question Papers</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <p className="text-sm">{question.exam.title}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {question.exam.exam_type}
-                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                        {question.exams.map((pastExam: { id: number; title: string; year?: number | null }) => (
+                                            <span key={pastExam.id} className="text-xs rounded bg-muted px-2 py-1">
+                                                {pastExam.year ?? pastExam.title}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </CardContent>
                             </Card>
                         )}
