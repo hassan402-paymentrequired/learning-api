@@ -6,7 +6,6 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\View;
 
 class PasswordResetNotification extends Notification implements ShouldQueue
 {
@@ -37,7 +36,7 @@ class PasswordResetNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Password Reset Code')
+            ->subject('Reset your ' . config('app.name') . ' password')
             ->view('emails.password-reset', [
                 'user' => $notifiable,
                 'otp' => $this->otp,

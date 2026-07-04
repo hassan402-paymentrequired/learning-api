@@ -7,37 +7,33 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class WelcomeNotification extends Notification implements ShouldQueue
+class MarketingReengagementNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @return array<int, string>
-     */
+    public function __construct(
+        public string $unsubscribeUrl,
+        public string $preferencesUrl
+    ) {
+    }
+
     public function via(object $notifiable): array
     {
         return ['mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Welcome to ' . config('app.name') . ' — you\'re all set')
-            ->view('emails.welcome', [
+            ->subject('We miss you at ' . config('app.name'))
+            ->view('emails.marketing.reengagement', [
                 'user' => $notifiable,
+                'unsubscribeUrl' => $this->unsubscribeUrl,
+                'preferencesUrl' => $this->preferencesUrl,
+                'showFooter' => false,
             ]);
     }
 
-    /**
-     * Get the array representation of the notification.
-     *
-     * @return array<string, mixed>
-     */
     public function toArray(object $notifiable): array
     {
         return [];

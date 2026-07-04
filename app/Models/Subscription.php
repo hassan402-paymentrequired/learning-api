@@ -21,6 +21,9 @@ class Subscription extends Model
         'status',
         'starts_at',
         'expires_at',
+        'expiry_reminder_7d_sent_at',
+        'expiry_reminder_1d_sent_at',
+        'receipt_email_sent_at',
         'cancelled_at',
         'notes',
         'type',
@@ -33,6 +36,9 @@ class Subscription extends Model
         'discount_amount' => 'decimal:2',
         'starts_at' => 'datetime',
         'expires_at' => 'datetime',
+        'expiry_reminder_7d_sent_at' => 'datetime',
+        'expiry_reminder_1d_sent_at' => 'datetime',
+        'receipt_email_sent_at' => 'datetime',
         'cancelled_at' => 'datetime',
     ];
 

@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ExamCategoryController;
+use App\Http\Controllers\Api\MarketingUnsubscribeController;
 use App\Http\Controllers\Api\NotificationSettingsController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\WaitlistController;
@@ -51,6 +52,9 @@ Route::get('/subscriptions/cancel', [SubscriptionController::class, 'cancel']);
 Route::post('/waitlist', [WaitlistController::class, 'store']);
 
 Route::get('/push/vapid-public-key', [PushSubscriptionController::class, 'vapidPublicKey']);
+
+Route::get('/marketing/unsubscribe', MarketingUnsubscribeController::class)
+    ->name('marketing.unsubscribe');
 
 // Protected routes - allow /me and /logout without email verification (needed for verification flow)
 Route::middleware('auth:api')->group(function () {

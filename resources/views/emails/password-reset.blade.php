@@ -1,45 +1,55 @@
 @extends('emails.layouts.base')
 
+@section('title', 'Reset your password — ' . config('app.name'))
+@section('preheader', 'Use code ' . $otp . ' to reset your password.')
+
 @section('content')
-<!--[if mso]><table role="presentation" width="100%"><tr><td><![endif]-->
-<h1 style="margin: 0px; line-height: 140%; text-align: center; word-wrap: break-word; font-family: 'Montserrat',sans-serif; font-size: 22px; font-weight: 700;"><span>Reset Your Password</span></h1>
-<!--[if mso]></td></tr></table><![endif]-->
-
-<table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-  <tbody>
+@php
+    $expiresMinutes = (int) config('auth.password_reset_expires_in', 15);
+@endphp
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
     <tr>
-      <td style="overflow-wrap:break-word;word-break:break-word;padding:20px 10px;font-family:arial,helvetica,sans-serif;" align="left">
-        <div style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
-          <p style="line-height: 140%; margin: 0px;">Hi {{ $user->name ?? 'there' }},</p>
-          <p style="line-height: 140%; margin: 10px 0 0 0;">You requested to reset your password. Please use the following One Time Password (OTP):</p>
-        </div>
-      </td>
+        <td style="padding-bottom: 8px;">
+            <p style="margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #71717a;">
+                Password reset
+            </p>
+            <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.03em; color: #18181b;">
+                Reset your password
+            </h1>
+        </td>
     </tr>
-  </tbody>
-</table>
-
-<table id="u_content_button_1" style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-  <tbody>
     <tr>
-      <td style="overflow-wrap:break-word;word-break:break-word;padding:10px 10px 30px;font-family:arial,helvetica,sans-serif;" align="left">
-        <div align="center">
-          <div class="v-button v-size-width" style="box-sizing: border-box; display: inline-block; text-decoration: none; text-size-adjust: none; text-align: center; color: rgb(255, 255, 255); background: rgb(0, 0, 0); border-radius: 0px; width: 48%; max-width: 100%; word-break: break-word; overflow-wrap: break-word; border-color: rgb(0, 0, 0); border-style: solid; border-width: 2px; font-size: 18px; line-height: inherit;"><span style="display:block;padding:10px 20px 8px;line-height:120%;">{{ $otp }}</span></div>
-        </div>
-      </td>
+        <td style="padding: 20px 0 8px;">
+            <p style="margin: 0 0 14px; font-size: 16px; line-height: 26px; color: #52525b;">
+                Hi {{ $user->name ?? 'there' }},
+            </p>
+            <p style="margin: 0; font-size: 16px; line-height: 26px; color: #52525b; text-align: center;">
+                We received a request to reset your password. Use the code below on the reset page.
+            </p>
+        </td>
     </tr>
-  </tbody>
-</table>
-
-<table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-  <tbody>
     <tr>
-      <td style="overflow-wrap:break-word;word-break:break-word;padding:30px 10px 10px;font-family:arial,helvetica,sans-serif;" align="left">
-        <div style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
-          <p style="line-height: 140%; margin: 0px;">This passcode will only be valid for the next <span style="font-weight: bold;">{{ config('auth.password_reset_expires_in', 15) }} minutes</span>.</p>
-          <p style="line-height: 140%; margin: 10px 0 0 0;">If you did not request a password reset, please ignore this email.</p>
-        </div>
-      </td>
+        <td style="padding: 8px 0 24px;">
+            @include('emails.partials.otp', [
+                'code' => $otp,
+                'expires' => $expiresMinutes . ' ' . \Illuminate\Support\Str::plural('minute', $expiresMinutes),
+            ])
+        </td>
     </tr>
-  </tbody>
+    <tr>
+        <td style="padding-bottom: 28px;">
+            @include('emails.partials.button', [
+                'url' => rtrim(config('app.frontend_url', config('app.url')), '/') . '/authenticate/reset-password',
+                'label' => 'Continue to reset',
+            ])
+        </td>
+    </tr>
+    <tr>
+        <td>
+            @component('emails.partials.callout', ['type' => 'warning'])
+                If you didn't request a password reset, ignore this email — your password won't change unless you use this code.
+            @endcomponent
+        </td>
+    </tr>
 </table>
 @endsection

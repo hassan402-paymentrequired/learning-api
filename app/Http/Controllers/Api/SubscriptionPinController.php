@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SubscriptionPin;
 use App\Models\SubscriptionSetting;
+use App\Services\SubscriptionEmailService;
+use App\Support\PublicId;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -13,7 +15,7 @@ class SubscriptionPinController extends Controller
     /**
      * Redeem a 6-digit PIN to activate the user's subscription.
      */
-    public function redeem(Request $request)
+    public function redeem(Request $request, SubscriptionEmailService $subscriptionEmail)
     {
         $request->validate([
             'pin' => 'required|string|size:6|regex:/^\d{6}$/',
@@ -81,14 +83,13 @@ class SubscriptionPinController extends Controller
             'used_at' => now(),
         ]);
 
+        $subscriptionEmail->sendReceipt($subscription->fresh());
+
         return response()->json([
             'success' => true,
             'message' => 'Subscription activated successfully!',
             'data'    => [
-                'subscription_id'        => $subscription->id,
-                'status'                 => 'active',
-                'type'                   => 'pin',
-                'expires_at'             => $expiresAt->toIso8601String(),
+                'subscription' => PublicId::subscription($subscription->fresh()->load('plan')),
             ],
         ]);
     }

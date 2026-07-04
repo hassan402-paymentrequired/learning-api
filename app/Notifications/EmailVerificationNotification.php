@@ -6,7 +6,6 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\View;
 
 class EmailVerificationNotification extends Notification implements ShouldQueue
 {
@@ -37,7 +36,7 @@ class EmailVerificationNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Email Verification Code')
+            ->subject('Your ' . config('app.name') . ' verification code')
             ->view('emails.email-verification', [
                 'user' => $notifiable,
                 'otp' => $this->otp,

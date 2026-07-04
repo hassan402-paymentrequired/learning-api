@@ -1,48 +1,52 @@
 @extends('emails.layouts.base')
 
+@section('title', 'Verify your email — ' . config('app.name'))
+@section('preheader', 'Your verification code is ' . $otp . '. It expires in 10 minutes.')
+
 @section('content')
-<!--[if mso]><table role="presentation" width="100%"><tr><td><![endif]-->
-<h1 style="margin: 0px; line-height: 140%; text-align: center; word-wrap: break-word; font-family: 'Montserrat',sans-serif; font-size: 22px; font-weight: 700;"><span>Your one-time code is</span></h1>
-<!--[if mso]></td></tr></table><![endif]-->
-
-<table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-  <tbody>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
     <tr>
-      <td style="overflow-wrap:break-word;word-break:break-word;padding:10px;font-family:arial,helvetica,sans-serif;" align="left">
-        <div align="center">
-          <div class="v-button v-size-width" style="box-sizing: border-box; display: inline-block; text-decoration: none; text-size-adjust: none; text-align: center; color: rgb(0, 0, 0); background: rgb(255, 255, 255); border-radius: 0px; width: 38%; max-width: 100%; word-break: break-word; overflow-wrap: break-word; border-color: rgb(0, 0, 0); border-style: solid; border-width: 2px; font-size: 18px; line-height: inherit;"><span style="display:block;padding:10px 20px;line-height:120%;">{{ $otp }}</span></div>
-        </div>
-      </td>
+        <td style="padding-bottom: 8px;">
+            <p style="margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #71717a;">
+                Email verification
+            </p>
+            <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.03em; color: #18181b;">
+                Confirm it's really you
+            </h1>
+        </td>
     </tr>
-  </tbody>
-</table>
-
-<table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-  <tbody>
     <tr>
-      <td style="overflow-wrap:break-word;word-break:break-word;padding:30px 10px 10px;font-family:arial,helvetica,sans-serif;" align="left">
-        <div style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
-          <p style="line-height: 140%; margin: 0px;">Please verify you're really you by entering this 6-digit code when you sign in.</p>
-          <p style="line-height: 140%; margin: 0px;">Just a heads up, this code will expire in 20 minutes for security reasons.</p>
-        </div>
-      </td>
+        <td style="padding: 20px 0 8px;">
+            <p style="margin: 0; font-size: 16px; line-height: 26px; color: #52525b; text-align: center;">
+                Enter this code to verify your email address and finish setting up your account.
+            </p>
+        </td>
     </tr>
-  </tbody>
-</table>
-
-<!--[if mso]><table role="presentation" width="100%"><tr><td><![endif]-->
-<h1 style="margin: 0px; line-height: 140%; text-align: center; word-wrap: break-word; font-family: 'Montserrat',sans-serif; font-size: 16px; font-weight: 400;"><span>If you didn't just try to sign in,<br />we recommend you reset your password here:</span></h1>
-<!--[if mso]></td></tr></table><![endif]-->
-
-<table id="u_content_button_1" style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-  <tbody>
     <tr>
-      <td style="overflow-wrap:break-word;word-break:break-word;padding:10px 10px 30px;font-family:arial,helvetica,sans-serif;" align="left">
-        <div align="center">
-          <a href="{{ config('app.frontend_url', config('app.url')) }}/authenticate/reset-password" target="_blank" class="v-button v-size-width" style="box-sizing: border-box; display: inline-block; text-decoration: none; text-size-adjust: none; text-align: center; color: rgb(255, 255, 255); background: rgb(0, 0, 0); border-radius: 0px; width: 48%; max-width: 100%; word-break: break-word; overflow-wrap: break-word; border-color: rgb(0, 0, 0); border-style: solid; border-width: 2px; font-size: 18px; line-height: inherit;"><span style="display:block;padding:10px 20px 8px;line-height:120%;">Reset Your Password</span></a>
-        </div>
-      </td>
+        <td style="padding: 8px 0 24px;">
+            @include('emails.partials.otp', [
+                'code' => $otp,
+                'expires' => '10 minutes',
+            ])
+        </td>
     </tr>
-  </tbody>
+    <tr>
+        <td style="padding-bottom: 28px;">
+            @component('emails.partials.callout', ['type' => 'warning'])
+                If you didn't create a {{ config('app.name') }} account, you can safely ignore this email. Someone may have entered your address by mistake.
+            @endcomponent
+        </td>
+    </tr>
+    <tr>
+        <td align="center" style="padding-top: 4px;">
+            <p style="margin: 0 0 16px; font-size: 14px; line-height: 22px; color: #71717a;">
+                Didn't request this? Secure your account:
+            </p>
+            @include('emails.partials.button', [
+                'url' => rtrim(config('app.frontend_url', config('app.url')), '/') . '/authenticate/reset-password',
+                'label' => 'Reset password',
+            ])
+        </td>
+    </tr>
 </table>
 @endsection

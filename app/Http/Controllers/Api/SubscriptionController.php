@@ -7,6 +7,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\PublicId;
+use App\Services\SubscriptionEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -258,7 +259,7 @@ class SubscriptionController extends Controller
      * This route is called by Paystack after payment.
      * Returns a simple HTML page that the WebView can detect.
      */
-    public function callback(Request $request)
+    public function callback(Request $request, SubscriptionEmailService $subscriptionEmail)
     {
         $reference = $request->query('reference');
         $trxref = $request->query('trxref', $reference);
@@ -327,6 +328,8 @@ class SubscriptionController extends Controller
                     $user->generateReferralCode();
                 }
             });
+
+            $subscriptionEmail->sendReceipt($subscription->fresh());
         }
 
         // Return success page (WebView will detect navigation to this URL)
@@ -347,7 +350,7 @@ class SubscriptionController extends Controller
     /**
      * Verify payment with Paystack.
      */
-    public function verifyPayment(Request $request)
+    public function verifyPayment(Request $request, SubscriptionEmailService $subscriptionEmail)
     {
         $request->validate([
             'reference' => 'required|string',
@@ -411,6 +414,8 @@ class SubscriptionController extends Controller
                     $user->generateReferralCode();
                 }
             });
+
+            $subscriptionEmail->sendReceipt($subscription->fresh());
         } elseif (empty($subscription->device_id) && !empty($deviceId)) {
             // Legacy subscriptions activated before device binding was enforced
             $subscription->update(['device_id' => $deviceId]);

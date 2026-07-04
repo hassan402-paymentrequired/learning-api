@@ -1,121 +1,104 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD XHTML 1.0 Transitional //EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+@php
+    $appName = config('app.name', 'Stepra');
+    $frontendUrl = rtrim(config('app.frontend_url', config('app.url')), '/');
+    $supportEmail = config('mail.from.address', 'hello@stepra.app');
+    $year = date('Y');
+@endphp
+<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="x-apple-disable-message-reformatting">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-
-  <style type="text/css">
-    @media only screen and (min-width: 620px) {
-      .u-row { width: 600px !important; }
-      .u-row .u-col { vertical-align: top; }
-      .u-row .u-col-100 { width: 600px !important; }
-    }
-
-    @media only screen and (max-width: 620px) {
-      .u-row-container { max-width: 100% !important; padding-left: 0px !important; padding-right: 0px !important; }
-      .u-row { width: 100% !important; }
-      .u-row .u-col { display: block !important; width: 100% !important; min-width: 320px !important; max-width: 100% !important; }
-      .u-row .u-col > div { margin: 0 auto; }
-    }
-
-    body{margin:0;padding:0}table,td,tr{border-collapse:collapse;vertical-align:top}.ie-container table,.mso-container table{table-layout:fixed}*{line-height:inherit}a[x-apple-data-detectors=true]{color:inherit!important;text-decoration:none!important}
-    table, td { color: #000000; } #u_body a { color: #0000ee; text-decoration: underline; } @media (max-width: 480px) { #u_content_button_1 .v-size-width { width: 76% !important; } }
-  </style>
-
-  <link href="https://fonts.googleapis.com/css?family=Montserrat:400,700&display=swap" rel="stylesheet" type="text/css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <title>@yield('title', $appName)</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+        body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; }
+        a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
+        @media only screen and (max-width: 620px) {
+            .email-shell { width: 100% !important; }
+            .email-body-cell { padding-left: 20px !important; padding-right: 20px !important; }
+            .email-header-cell { padding-left: 20px !important; padding-right: 20px !important; }
+            .email-footer-cell { padding-left: 20px !important; padding-right: 20px !important; }
+        }
+    </style>
 </head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f7; color: #18181b;">
+@if(trim($__env->yieldContent('preheader')))
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all; opacity: 0; color: transparent; height: 0; width: 0;">
+    @yield('preheader')
+</div>
+@endif
 
-<body class="clean-body u_body" style="margin: 0;padding: 0;-webkit-text-size-adjust: 100%;background-color: #f0f0f0;color: #000000">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f5f5f7;">
+    <tr>
+        <td align="center" style="padding: 32px 16px 40px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-shell" style="max-width: 600px; width: 100%;">
 
-<table role="presentation" id="u_body" style="border-collapse: collapse;table-layout: fixed;border-spacing: 0;mso-table-lspace: 0pt;mso-table-rspace: 0pt;vertical-align: top;min-width: 320px;Margin: 0 auto;background-color: #f0f0f0;width:100%" cellpadding="0" cellspacing="0">
-  <tbody>
-  <tr style="vertical-align: top">
-    <td style="word-break: break-word;border-collapse: collapse !important;vertical-align: top">
+                {{-- Brand header --}}
+                <tr>
+                    <td class="email-header-cell" align="left" style="padding: 0 32px 20px;">
+                        <a href="{{ $frontendUrl }}" target="_blank" style="text-decoration: none; display: inline-block;">
+                            <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; color: #18181b;">
+                                {{ $appName }}
+                            </span>
+                        </a>
+                    </td>
+                </tr>
 
-      {{-- Header with logo --}}
-      <div class="u-row-container" style="padding: 0px;background-color: transparent">
-        <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent;">
-          <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: transparent;">
-            <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
-              <div style="background-color: #ddffe7;height: 100%;width: 100% !important;">
-                <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;">
-                  <table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                    <tbody>
-                      <tr>
-                        <td style="overflow-wrap:break-word;word-break:break-word;padding:10px;font-family:arial,helvetica,sans-serif;" align="left">
-                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {{-- Card --}}
+                <tr>
+                    <td style="background-color: #ffffff; border: 1px solid #e4e4e7; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                             <tr>
-                              <td style="padding-right: 0px;padding-left: 0px;" align="center">
-                                <img align="center" border="0" src="{{ asset('images/image-1.png') }}" alt="{{ config('app.name') }}" title="{{ config('app.name') }}" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: inline-block !important;border: none;height: auto;float: none;width: 100%;max-width: 190px;" width="190"/>
-                              </td>
+                                <td style="height: 4px; background: linear-gradient(90deg, #18181b 0%, #52525b 100%); font-size: 0; line-height: 0;">&nbsp;</td>
                             </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+                            <tr>
+                                <td class="email-body-cell" style="padding: 36px 32px 32px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+                                    @yield('content')
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
 
-      {{-- Main content --}}
-      <div class="u-row-container" style="padding: 0px;background-color: transparent">
-        <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent;">
-          <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: transparent;">
-            <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
-              <div style="background-color: #ffffff;height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
-                <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
-                  <table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                    <tbody>
-                      <tr>
-                        <td style="overflow-wrap:break-word;word-break:break-word;padding:30px 10px 10px;font-family:arial,helvetica,sans-serif;" align="left">
-                          @yield('content')
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+                @if($showFooter ?? true)
+                {{-- Footer --}}
+                <tr>
+                    <td class="email-footer-cell" align="center" style="padding: 24px 32px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+                        <p style="margin: 0 0 10px; font-size: 13px; line-height: 20px; color: #71717a;">
+                            Questions? Reply to this email or contact
+                            <a href="mailto:{{ $supportEmail }}" style="color: #18181b; text-decoration: underline;">{{ $supportEmail }}</a>.
+                        </p>
+                        <p style="margin: 0 0 10px; font-size: 13px; line-height: 20px; color: #71717a;">
+                            <a href="{{ $frontendUrl }}/privacy-policy" target="_blank" style="color: #71717a; text-decoration: underline;">Privacy Policy</a>
+                            &nbsp;&middot;&nbsp;
+                            <a href="{{ $frontendUrl }}" target="_blank" style="color: #71717a; text-decoration: underline;">Open {{ $appName }}</a>
+                        </p>
+                        <p style="margin: 0; font-size: 12px; line-height: 18px; color: #a1a1aa;">
+                            &copy; {{ $year }} {{ $appName }}. All rights reserved.
+                        </p>
+                    </td>
+                </tr>
+                @endif
 
-      @if($showFooter ?? true)
-      {{-- Footer --}}
-      <div class="u-row-container" style="padding: 2px 0px 0px;background-color: transparent">
-        <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent;">
-          <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: transparent;">
-            <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
-              <div style="background-color: #ffffff;height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
-                <div style="box-sizing: border-box; height: 100%; padding: 0px;">
-                  <table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                    <tbody>
-                      <tr>
-                        <td style="overflow-wrap:break-word;word-break:break-word;padding:30px 10px 10px;font-family:arial,helvetica,sans-serif;" align="left">
-                          <h1 style="margin: 0px; line-height: 140%; text-align: center; word-wrap: break-word; font-family: 'Montserrat',sans-serif; font-size: 13px; font-weight: 400;">
-                            <span>If you have any questions, contact our Website Guides. Or, visit our Help Center.</span>
-                          </h1>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      @endif
-
-    </td>
-  </tr>
-  </tbody>
+            </table>
+        </td>
+    </tr>
 </table>
 </body>
 </html>

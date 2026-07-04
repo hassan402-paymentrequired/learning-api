@@ -2,42 +2,36 @@
 
 namespace App\Notifications;
 
+use App\Models\Subscription;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class WelcomeNotification extends Notification implements ShouldQueue
+class SubscriptionReceiptNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @return array<int, string>
-     */
+    public function __construct(
+        public Subscription $subscription
+    ) {
+    }
+
     public function via(object $notifiable): array
     {
         return ['mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Welcome to ' . config('app.name') . ' — you\'re all set')
-            ->view('emails.welcome', [
+            ->subject('Your ' . config('app.name') . ' subscription is active')
+            ->view('emails.subscription-receipt', [
                 'user' => $notifiable,
+                'subscription' => $this->subscription,
             ]);
     }
 
-    /**
-     * Get the array representation of the notification.
-     *
-     * @return array<string, mixed>
-     */
     public function toArray(object $notifiable): array
     {
         return [];

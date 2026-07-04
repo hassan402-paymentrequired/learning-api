@@ -32,6 +32,9 @@ class User extends Authenticatable implements JWTSubject
         'morning_reminder_time',
         'timezone',
         'last_morning_push_date',
+        'subscription_reminder_emails_enabled',
+        'marketing_emails_enabled',
+        'last_push_notification_date',
     ];
 
     /**
@@ -62,7 +65,12 @@ class User extends Authenticatable implements JWTSubject
             'subscription_expires_at' => 'datetime',
             'is_admin' => 'boolean',
             'push_notifications_enabled' => 'boolean',
+            'subscription_reminder_emails_enabled' => 'boolean',
+            'marketing_emails_enabled' => 'boolean',
+            'last_marketing_email_sent_at' => 'datetime',
+            'last_reengagement_email_sent_at' => 'datetime',
             'last_morning_push_date' => 'date',
+            'last_push_notification_date' => 'date',
         ];
     }
 

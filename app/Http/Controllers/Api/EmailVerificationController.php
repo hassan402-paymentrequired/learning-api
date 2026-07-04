@@ -7,6 +7,8 @@ use App\Models\Otp;
 use App\Models\User;
 use App\Notifications\EmailVerificationNotification;
 use App\Notifications\WelcomeNotification;
+use App\Services\OtpRateLimiter;
+use App\Support\PublicId;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -15,7 +17,7 @@ class EmailVerificationController extends Controller
     /**
      * Send OTP for email verification.
      */
-    public function sendOtp(Request $request)
+    public function sendOtp(Request $request, OtpRateLimiter $rateLimiter)
     {
         $request->validate([
             'email' => 'required|email|exists:users,email',
@@ -28,6 +30,16 @@ class EmailVerificationController extends Controller
                 'success' => false,
                 'message' => 'Email is already verified.',
             ], 400);
+        }
+
+        if ($rateLimiter->tooManyAttempts($user->email, 'email_verification')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Too many verification codes requested. Please try again later.',
+                'data' => [
+                    'retry_after_seconds' => $rateLimiter->retryAfterSeconds($user->email, 'email_verification'),
+                ],
+            ], 429);
         }
 
         // Create OTP
@@ -130,7 +142,7 @@ class EmailVerificationController extends Controller
             'success' => true,
             'message' => 'Email verified successfully.',
             'data' => [
-                'user' => $user->fresh(),
+                'user' => PublicId::user($user->fresh()),
             ],
         ]);
     }

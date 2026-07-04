@@ -19,6 +19,9 @@ trait HasPublicUuid
         });
     }
 
+    /**
+     * Public API routes use UUIDs; admin routes keep using internal numeric IDs.
+     */
     public function getRouteKeyName(): string
     {
         return 'uuid';
@@ -26,8 +29,15 @@ trait HasPublicUuid
 
     public function resolveRouteBinding($value, $field = null)
     {
-        $field = $field ?? $this->getRouteKeyName();
+        if ($field !== null) {
+            return $this->where($field, $value)->first();
+        }
 
-        return $this->where($field, $value)->first();
+        // Admin portal and legacy links still pass bigint IDs.
+        if (is_numeric($value)) {
+            return $this->where($this->getKeyName(), $value)->first();
+        }
+
+        return $this->where('uuid', $value)->first();
     }
 }

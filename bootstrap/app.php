@@ -29,4 +29,13 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('streak:send-morning-reminders')->hourly();
+        $schedule->command('subscriptions:send-expiry-reminders')
+            ->dailyAt('09:00')
+            ->timezone('Africa/Lagos');
+        $schedule->command('marketing:send-study-tips')
+            ->weeklyOn(2, '10:00')
+            ->timezone('Africa/Lagos');
+        $schedule->command('marketing:send-reengagement')
+            ->dailyAt('11:00')
+            ->timezone('Africa/Lagos');
     })->create();

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Otp;
 use App\Models\User;
 use App\Notifications\PasswordResetNotification;
+use App\Services\OtpRateLimiter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -15,19 +16,26 @@ class PasswordResetController extends Controller
     /**
      * Send OTP for password reset.
      */
-    public function sendOtp(Request $request)
+    public function sendOtp(Request $request, OtpRateLimiter $rateLimiter)
     {
         $request->validate([
             'email' => 'required|email|exists:users,email',
         ]);
 
+        if ($rateLimiter->tooManyAttempts($request->email, 'password_reset')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Too many reset codes requested. Please try again later.',
+                'data' => [
+                    'retry_after_seconds' => $rateLimiter->retryAfterSeconds($request->email, 'password_reset'),
+                ],
+            ], 429);
+        }
+
         $user = User::where('email', $request->email)->first();
 
         // Create OTP
         $otp = Otp::createForPasswordReset($request->email);
-
-        // Find user by email to send notification
-        $user = User::where('email', $request->email)->first();
 
         if ($user) {
             // Send OTP via notification (queued)
