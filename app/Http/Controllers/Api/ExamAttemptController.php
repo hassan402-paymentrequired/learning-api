@@ -637,6 +637,123 @@ class ExamAttemptController extends Controller
     }
 
     /**
+     * Resume an in-progress exam attempt (questions + saved answers).
+     */
+    public function resume(ExamAttempt $attempt)
+    {
+        if ($attempt->user_id !== auth()->id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized',
+            ], 403);
+        }
+
+        if ($attempt->status !== 'in_progress') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Exam is not in progress',
+            ], 400);
+        }
+
+        $subjectsData = $attempt->subjects_data ?? $attempt->subjects ?? [];
+        $subjectsQuestions = [];
+        $subjects = [];
+
+        foreach ($subjectsData as $subjectData) {
+            if (!is_array($subjectData)) {
+                continue;
+            }
+
+            $subjectName = trim($subjectData['subject'] ?? '');
+            if ($subjectName === '') {
+                continue;
+            }
+
+            $subjects[] = $subjectName;
+            $questionUuids = $subjectData['question_uuids'] ?? [];
+
+            if (empty($questionUuids)) {
+                $subjectsQuestions[$subjectName] = [];
+                continue;
+            }
+
+            $questionsByUuid = Question::whereIn('uuid', $questionUuids)
+                ->with(['answers' => fn ($q) => $q->orderBy('order')])
+                ->get()
+                ->keyBy('uuid');
+
+            $subjectsQuestions[$subjectName] = collect($questionUuids)
+                ->map(fn ($uuid) => $questionsByUuid->get($uuid))
+                ->filter()
+                ->map(fn ($q) => PublicId::question($q))
+                ->values()
+                ->all();
+        }
+
+        if (empty($subjectsQuestions)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No questions found for this attempt.',
+            ], 404);
+        }
+
+        $userAnswers = $attempt->userAnswers()
+            ->with(['question:id,uuid,question_type', 'answer:id,uuid,answer_text'])
+            ->get();
+
+        $selectedAnswers = [];
+        $textInputAnswers = [];
+        $questionStartTime = [];
+
+        foreach ($userAnswers as $userAnswer) {
+            $questionUuid = $userAnswer->question?->uuid;
+            if (!$questionUuid) {
+                continue;
+            }
+
+            if (in_array($userAnswer->question->question_type, ['text_input', 'numeric_input', 'true_false'])) {
+                $textInputAnswers[$questionUuid] = $userAnswer->answer?->answer_text ?? '';
+            } elseif ($userAnswer->answer?->uuid) {
+                $selectedAnswers[$questionUuid] = $userAnswer->answer->uuid;
+            }
+
+            if ($userAnswer->time_spent) {
+                $questionStartTime[$questionUuid] = max(
+                    0,
+                    (int) (microtime(true) * 1000) - ($userAnswer->time_spent * 1000)
+                );
+            }
+        }
+
+        $durationMinutes = $attempt->duration_minutes ?? 60;
+        $examTitle = $attempt->exam?->title ?? 'Practice Session';
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'attempt' => [
+                    'uuid' => $attempt->uuid,
+                    'exam_uuid' => $attempt->exam?->uuid,
+                    'status' => $attempt->status,
+                    'started_at' => $attempt->started_at,
+                    'duration_minutes' => $durationMinutes,
+                    'total_questions' => $attempt->total_questions,
+                ],
+                'questions' => $subjectsQuestions,
+                'subjects' => $subjects,
+                'time_minutes' => $durationMinutes,
+                'exam_title' => $examTitle,
+                'is_practice' => $attempt->exam_id === null,
+                'progress' => [
+                    'selectedAnswers' => $selectedAnswers,
+                    'textInputAnswers' => $textInputAnswers,
+                    'questionStartTime' => $questionStartTime,
+                ],
+            ],
+        ]);
+    }
+
+    /**
      * Get detailed results for an exam attempt.
      */
     public function results(ExamAttempt $attempt)
@@ -743,6 +860,9 @@ class ExamAttemptController extends Controller
                         'explanation' => $question->explanation,
                         'expected_answer' => $question->expected_answer,
                         'image' => $question->image,
+                        'image_url' => $question->image
+                            ? asset('storage/' . ltrim($question->image, '/'))
+                            : null,
                         'subject' => $question->subject->name ?? $question->exams->first()?->subject,
                         'answers' => $questionAnswers,
                     ],

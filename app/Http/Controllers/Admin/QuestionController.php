@@ -79,7 +79,7 @@ class QuestionController extends Controller
             ->with('department:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'department_id', 'exam_types'])
-            ->map(fn (Subject $subject) use ($resolver) => [
+            ->map(fn (Subject $subject) => [
                 'id' => $subject->id,
                 'name' => $subject->name,
                 'department_id' => $subject->department_id,
@@ -302,7 +302,7 @@ class QuestionController extends Controller
             ->with('department:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'department_id', 'exam_types'])
-            ->map(fn (Subject $subject) use ($resolver) => [
+            ->map(fn (Subject $subject) => [
                 'id' => $subject->id,
                 'name' => $subject->name,
                 'department_id' => $subject->department_id,

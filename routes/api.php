@@ -91,6 +91,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     Route::post('/exam-attempts/{attempt}/submit-answers-bulk', [ExamAttemptController::class, 'submitAnswersBulk']);
     Route::post('/exam-attempts/{attempt}/complete', [ExamAttemptController::class, 'complete']);
     Route::get('/exam-attempts', [ExamAttemptController::class, 'index']);
+    Route::get('/exam-attempts/{attempt}/resume', [ExamAttemptController::class, 'resume']);
     Route::get('/exam-attempts/{attempt}', [ExamAttemptController::class, 'show']);
     Route::get('/exam-attempts/{attempt}/results', [ExamAttemptController::class, 'results']);
     Route::get('/analytics', [ExamAttemptController::class, 'analytics']);

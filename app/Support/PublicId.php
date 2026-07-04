@@ -122,6 +122,9 @@ final class PublicId
             'question_text' => $question->question_text,
             'question_type' => $question->question_type,
             'image' => $question->image,
+            'image_url' => $question->image
+                ? asset('storage/' . ltrim($question->image, '/'))
+                : null,
             'explanation' => $question->explanation ?? null,
             'expected_answer' => $question->expected_answer ?? null,
             'answers' => $answers,
