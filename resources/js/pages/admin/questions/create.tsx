@@ -117,6 +117,10 @@ export default function CreateQuestion({
     const selectedCategories = examCategories.filter((cat) =>
         effectiveExamTypes.includes(cat.slug),
     );
+    const hasDepartmentalCategories = examCategories.some(
+        (cat) => cat.flow_type === 'departmental',
+    );
+
     const hasStandardFlow = selectedCategories.some(
         (cat) => cat.flow_type === 'standard',
     );
@@ -283,36 +287,39 @@ export default function CreateQuestion({
                         )}
                         
                         <form onSubmit={submit} className="space-y-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="department_id">Department (optional)</Label>
-                                <Select
-                                    value={data.department_id?.toString() || 'all'}
-                                    onValueChange={(value) => {
-                                        setData('department_id', value === 'all' ? null : parseInt(value, 10));
-                                        setData('subject_id', '');
-                                        setData('test_ids', []);
-                                        setData('exam_types', []);
-                                    }}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="All departments" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All departments</SelectItem>
-                                        {departments.map((department) => (
-                                            <SelectItem
-                                                key={department.id}
-                                                value={department.id.toString()}
-                                            >
-                                                {department.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground">
-                                    Filter courses by department, or leave as all for JAMB and other subjects.
-                                </p>
-                            </div>
+                            {hasDepartmentalCategories && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="department_id">Department</Label>
+                                    <Select
+                                        value={data.department_id?.toString() || 'all'}
+                                        onValueChange={(value) => {
+                                            setData('department_id', value === 'all' ? null : parseInt(value, 10));
+                                            setData('subject_id', '');
+                                            setData('test_ids', []);
+                                            setData('exam_ids', []);
+                                            setData('exam_types', []);
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="All departments" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All departments</SelectItem>
+                                            {departments.map((department) => (
+                                                <SelectItem
+                                                    key={department.id}
+                                                    value={department.id.toString()}
+                                                >
+                                                    {department.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Only needed for UNILAG/DLI courses. Leave as &quot;All departments&quot; for JAMB subjects.
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="grid gap-2">
                                 <Label htmlFor="subject_id">Subject / Course *</Label>
@@ -376,17 +383,19 @@ export default function CreateQuestion({
 
                             {hasStandardFlow && data.subject_id && (
                                 <div className="grid gap-2">
-                                    <Label htmlFor="exam_ids">Past Question Years (optional)</Label>
+                                    <Label htmlFor="exam_ids">Past Question Years</Label>
                                     {examsForSubject.length === 0 ? (
                                         <p className="text-sm text-muted-foreground py-2">
-                                            No past question papers yet for this subject.
+                                            No past question papers yet for this subject. Create them under Past Questions first.
                                         </p>
                                     ) : (
                                         <MultiSelect
                                             id="exam_ids"
                                             options={examsForSubject.map((pastExam) => ({
                                                 value: String(pastExam.id),
-                                                label: `${pastExam.title}${pastExam.year ? ` (${pastExam.year})` : ''}`,
+                                                label: pastExam.year
+                                                    ? String(pastExam.year)
+                                                    : pastExam.title,
                                             }))}
                                             value={data.exam_ids.map(String)}
                                             onChange={(values) =>
@@ -395,11 +404,11 @@ export default function CreateQuestion({
                                                     values.map((value) => parseInt(value, 10)),
                                                 )
                                             }
-                                            placeholder="Select past question years"
+                                            placeholder="Select one or more years"
                                         />
                                     )}
                                     <p className="text-xs text-muted-foreground">
-                                        Link this question to one or more past question papers.
+                                        Link this question to past question papers (e.g. 2022, 2023, 2024). Optional for practice-only questions.
                                     </p>
                                     <InputError message={(errors as any).exam_ids} />
                                 </div>

@@ -19,6 +19,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import admin from '@/routes/admin';
 import { type BreadcrumbItem } from '@/types';
@@ -37,14 +38,23 @@ interface Exam {
     title: string;
     exam_type: string;
     subject: string | null;
+    year?: number | null;
+}
+
+interface RelatedExam {
+    id: number;
+    title: string;
+    subject: string | null;
+    year: number | null;
 }
 
 interface Props {
     exam: Exam;
     subjects: Subject[];
+    relatedExams?: RelatedExam[];
 }
 
-export default function CreateExamQuestion({ exam, subjects }: Props) {
+export default function CreateExamQuestion({ exam, subjects, relatedExams = [] }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Exams', href: admin.exams.index().url },
         { title: exam.title, href: admin.exams.show(exam.id).url },
@@ -61,6 +71,7 @@ export default function CreateExamQuestion({ exam, subjects }: Props) {
             | 'true_false',
         explanation: '',
         expected_answer: '',
+        exam_ids: [] as number[],
         answers: [
             { answer_text: '', is_correct: false, order: 'A' },
             { answer_text: '', is_correct: false, order: 'B' },
@@ -118,6 +129,8 @@ export default function CreateExamQuestion({ exam, subjects }: Props) {
         }));
         setData('answers', updated);
     };
+
+    const linkableExams = relatedExams.filter((relatedExam) => relatedExam.id !== exam.id);
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -200,6 +213,33 @@ export default function CreateExamQuestion({ exam, subjects }: Props) {
                         )}
                         
                         <form onSubmit={submit} className="space-y-6">
+                            {linkableExams.length > 0 && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="exam_ids">Also appear in these years</Label>
+                                    <MultiSelect
+                                        id="exam_ids"
+                                        options={linkableExams.map((relatedExam) => ({
+                                            value: String(relatedExam.id),
+                                            label: relatedExam.year
+                                                ? String(relatedExam.year)
+                                                : relatedExam.title,
+                                        }))}
+                                        value={data.exam_ids.map(String)}
+                                        onChange={(values) =>
+                                            setData(
+                                                'exam_ids',
+                                                values.map((value) => parseInt(value, 10)),
+                                            )
+                                        }
+                                        placeholder="Select additional years (optional)"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        {exam.year ?? exam.title} is included automatically. Select other years if this question also appeared in those papers.
+                                    </p>
+                                    <InputError message={(errors as any).exam_ids} />
+                                </div>
+                            )}
+
                             <div className="grid gap-2">
                                 <Label htmlFor="question_text">
                                     Question Text *

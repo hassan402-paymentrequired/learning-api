@@ -78,7 +78,13 @@ class QuestionController extends Controller
         $subjects = Subject::where('is_active', true)
             ->with('department:id,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'department_id', 'exam_types']);
+            ->get(['id', 'name', 'department_id', 'exam_types'])
+            ->map(fn (Subject $subject) use ($resolver) => [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'department_id' => $subject->department_id,
+                'exam_types' => $resolver->normalizeToSlugs($subject->exam_types ?? []),
+            ]);
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $subjectTests = SubjectTest::with('subject:id,name')
             ->orderBy('subject_id')
@@ -295,7 +301,13 @@ class QuestionController extends Controller
         $subjects = Subject::where('is_active', true)
             ->with('department:id,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'department_id']);
+            ->get(['id', 'name', 'department_id', 'exam_types'])
+            ->map(fn (Subject $subject) use ($resolver) => [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'department_id' => $subject->department_id,
+                'exam_types' => $resolver->normalizeToSlugs($subject->exam_types ?? []),
+            ]);
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $subjectTests = SubjectTest::with('subject:id,name')
             ->orderBy('subject_id')
