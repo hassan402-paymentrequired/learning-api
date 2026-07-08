@@ -120,6 +120,11 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(Referral::class, 'referrer_id');
     }
 
+    public function referralWithdrawals()
+    {
+        return $this->hasMany(ReferralWithdrawal::class);
+    }
+
     /**
      * Get the referral that referred this user.
      */

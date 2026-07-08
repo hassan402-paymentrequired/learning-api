@@ -42,6 +42,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{practiceAttempt}', [App\Http\Controllers\Admin\PracticeAttemptController::class, 'destroy'])->name('destroy');
         });
 
+        // Referral withdrawal routes
+        Route::prefix('referral-withdrawals')->name('referral-withdrawals.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\ReferralWithdrawalController::class, 'index'])->name('index');
+            Route::patch('/{referralWithdrawal}', [App\Http\Controllers\Admin\ReferralWithdrawalController::class, 'update'])->name('update');
+        });
+
         // Exams routes
         Route::prefix('exams')->name('exams.')->group(function () {
             Route::get('/', [App\Http\Controllers\Admin\ExamController::class, 'index'])->name('index');

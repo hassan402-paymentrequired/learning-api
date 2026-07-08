@@ -106,6 +106,14 @@ class ExamAttemptController extends Controller
         $user = auth()->user();
         $deviceId = $request->header('X-Device-Id');
         $hasActiveSubscription = $user->hasActiveSubscriptionForDevice($deviceId);
+
+        if (!$hasActiveSubscription) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An active subscription is required to access questions. Please subscribe to continue.',
+                'requires_subscription' => true,
+            ], 403);
+        }
         
         $request->validate([
             'exam_type' => 'required',
@@ -140,8 +148,7 @@ class ExamAttemptController extends Controller
             $subjectTestUuid = $sInput['subject_test_uuid'] ?? null;
             $year = $sInput['year'] ?? null;
             
-            // Limit questions for non-subscribed users
-            $count = $hasActiveSubscription ? $requestedCount : min($requestedCount, 5);
+            $count = $requestedCount;
             
             $subjectModel = Subject::where('name', $subjectName)->first();
             if (!$subjectModel) continue;

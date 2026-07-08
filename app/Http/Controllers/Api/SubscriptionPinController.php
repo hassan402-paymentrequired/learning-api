@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SubscriptionPin;
 use App\Models\SubscriptionSetting;
+use App\Services\ReferralService;
 use App\Services\SubscriptionEmailService;
 use App\Support\PublicId;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ class SubscriptionPinController extends Controller
     /**
      * Redeem a 6-digit PIN to activate the user's subscription.
      */
-    public function redeem(Request $request, SubscriptionEmailService $subscriptionEmail)
+    public function redeem(Request $request, SubscriptionEmailService $subscriptionEmail, ReferralService $referralService)
     {
         $request->validate([
             'pin' => 'required|string|size:6|regex:/^\d{6}$/',
@@ -82,6 +83,9 @@ class SubscriptionPinController extends Controller
             'status'  => 'used',
             'used_at' => now(),
         ]);
+
+        $referralService->rewardOnSubscription($user, $subscription->fresh());
+        $referralService->ensureReferralCode($user);
 
         $subscriptionEmail->sendReceipt($subscription->fresh());
 

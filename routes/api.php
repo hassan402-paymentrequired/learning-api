@@ -115,6 +115,8 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     Route::get('/referrals', [ReferralController::class, 'index']);
     Route::get('/referrals/code', [ReferralController::class, 'code']);
     Route::get('/referrals/balance', [ReferralController::class, 'balance']);
+    Route::get('/referrals/withdrawals', [ReferralController::class, 'withdrawals']);
+    Route::post('/referrals/withdraw', [ReferralController::class, 'withdraw']);
 
     // Leaderboard routes
     Route::get('/leaderboard', [LeaderboardController::class, 'index']);

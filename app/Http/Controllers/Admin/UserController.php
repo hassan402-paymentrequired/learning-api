@@ -104,10 +104,26 @@ class UserController extends Controller
             ->limit(20)
             ->get()
             ->map(function ($attempt) {
+                $examTitle = $attempt->exam?->title;
+                $examType = $attempt->exam?->exam_type;
+
+                if (!$examTitle) {
+                    $subjectNames = collect($attempt->subjects ?? [])
+                        ->pluck('subject')
+                        ->filter()
+                        ->values()
+                        ->all();
+
+                    $examTitle = !empty($subjectNames)
+                        ? 'Practice: ' . implode(', ', $subjectNames)
+                        : 'Practice Session';
+                    $examType = $examType ?? 'Practice';
+                }
+
                 return [
                     'id'              => $attempt->id,
-                    'exam_title'      => $attempt->exam->title,
-                    'exam_type'       => $attempt->exam->exam_type,
+                    'exam_title'      => $examTitle,
+                    'exam_type'       => $examType ?? 'Practice',
                     'status'          => $attempt->status,
                     'score'           => $attempt->score,
                     'correct_answers' => $attempt->correct_answers,
@@ -273,7 +289,7 @@ class UserController extends Controller
                 $expiresAt = now()->addDays($days);
             }
 
-            $user->subscriptions()->create([
+            $subscription = $user->subscriptions()->create([
                 'subscription_plan_id' => 1, // Default plan
                 'status'               => 'active',
                 'type'                 => 'manual',
@@ -284,6 +300,10 @@ class UserController extends Controller
                 'discount_amount'      => 0,
                 'notes'                => 'Manually activated by admin',
             ]);
+
+            app(\App\Services\ReferralService::class)->rewardOnSubscription($user, $subscription);
+            app(\App\Services\ReferralService::class)->ensureReferralCode($user);
+
             $message = "{$user->name}'s manual subscription activated until {$expiresAt->toDateString()}.";
         }
 

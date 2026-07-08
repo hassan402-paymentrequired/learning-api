@@ -7,6 +7,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\PublicId;
+use App\Services\ReferralService;
 use App\Services\SubscriptionEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -109,15 +110,13 @@ class SubscriptionController extends Controller
         $finalAmount = $originalAmount;
         $referral = null;
 
-        // Apply 5% discount if user was referred
-        $referral = null;
+        // Apply discount if user was referred
         if ($request->has('referral_code') && $request->referral_code) {
             $referrer = User::where('referral_code', $request->referral_code)->first();
             if ($referrer && $referrer->id !== $user->id) {
-                // Check if user hasn't been referred before
                 if (!$user->referred_by) {
-                    $discountAmount = $originalAmount * 0.05; // 5% discount
-                    $finalAmount = $originalAmount;
+                    $discountAmount = $originalAmount * (config('referral.referred_discount_percent', 5) / 100);
+                    $finalAmount = $originalAmount - $discountAmount;
                     // Store referral relationship (will be finalized after payment)
                     $user->referred_by = $referrer->id;
                     $user->save();
@@ -259,7 +258,7 @@ class SubscriptionController extends Controller
      * This route is called by Paystack after payment.
      * Returns a simple HTML page that the WebView can detect.
      */
-    public function callback(Request $request, SubscriptionEmailService $subscriptionEmail)
+    public function callback(Request $request, SubscriptionEmailService $subscriptionEmail, ReferralService $referralService)
     {
         $reference = $request->query('reference');
         $trxref = $request->query('trxref', $reference);
@@ -302,31 +301,13 @@ class SubscriptionController extends Controller
 
         // Activate subscription if not already active
         if ($subscription->status !== 'active') {
-            DB::transaction(function () use ($subscription, $transactionData) {
+            DB::transaction(function () use ($subscription, $transactionData, $referralService) {
                 $user = $subscription->user;
 
-                // Update subscription (device_id was captured at payment initialization)
                 $subscription->update($this->buildActivationPayload($subscription, null));
 
-                // Process referral rewards: referrer gets 500 credit when referred user subscribes
-                $referral = \App\Models\Referral::where('referred_id', $user->id)
-                    ->where('status', 'pending')
-                    ->first();
-
-                if ($referral) {
-                    $referral->update([
-                        'subscription_uuid' => $subscription->uuid,
-                        'referrer_reward_amount' => 500,
-                        'status' => 'rewarded',
-                        'rewarded_at' => now(),
-                    ]);
-                    Log::info('Referral rewarded: referrer_id=' . $referral->referrer_id . ', referred_id=' . $user->id . ', subscription_id=' . $subscription->id);
-                }
-
-                // Generate referral code for user if they don't have one
-                if (!$user->referral_code) {
-                    $user->generateReferralCode();
-                }
+                $referralService->rewardOnSubscription($user, $subscription->fresh());
+                $referralService->ensureReferralCode($user);
             });
 
             $subscriptionEmail->sendReceipt($subscription->fresh());
@@ -350,7 +331,7 @@ class SubscriptionController extends Controller
     /**
      * Verify payment with Paystack.
      */
-    public function verifyPayment(Request $request, SubscriptionEmailService $subscriptionEmail)
+    public function verifyPayment(Request $request, SubscriptionEmailService $subscriptionEmail, ReferralService $referralService)
     {
         $request->validate([
             'reference' => 'required|string',
@@ -388,31 +369,13 @@ class SubscriptionController extends Controller
         $deviceId = $request->header('X-Device-Id');
 
         if ($subscription->status !== 'active') {
-            DB::transaction(function () use ($subscription, $transactionData, $deviceId) {
+            DB::transaction(function () use ($subscription, $transactionData, $deviceId, $referralService) {
                 $user = $subscription->user;
 
-                // Update subscription and bind to the purchasing device
                 $subscription->update($this->buildActivationPayload($subscription, $deviceId));
 
-                // Process referral rewards: referrer gets 500 credit when referred user subscribes
-                $referral = \App\Models\Referral::where('referred_id', $user->id)
-                    ->where('status', 'pending')
-                    ->first();
-
-                if ($referral) {
-                    $referral->update([
-                        'subscription_uuid' => $subscription->uuid,
-                        'referrer_reward_amount' => 500,
-                        'status' => 'rewarded',
-                        'rewarded_at' => now(),
-                    ]);
-                    Log::info('Referral rewarded (verifyPayment): referrer_id=' . $referral->referrer_id . ', referred_id=' . $user->id . ', subscription_id=' . $subscription->id);
-                }
-
-                // Generate referral code for user if they don't have one
-                if (!$user->referral_code) {
-                    $user->generateReferralCode();
-                }
+                $referralService->rewardOnSubscription($user, $subscription->fresh());
+                $referralService->ensureReferralCode($user);
             });
 
             $subscriptionEmail->sendReceipt($subscription->fresh());
