@@ -529,16 +529,19 @@ class ExamController extends Controller
             abort(404);
         }
 
-        $subjectsQuery = $department->subjects()
-            ->where('subjects.is_active', true);
+        $subjectsQuery = Subject::query()
+            ->where('is_active', true)
+            ->whereHas('departments', function ($query) use ($department) {
+                $query->where('departments.id', $department->id);
+            });
 
         $resolver->applySubjectExamTypeFilter($subjectsQuery, $request->exam_type);
 
         $subjects = $subjectsQuery
             ->with('tests:uuid,subject_id,name')
             ->withCount('questions')
-            ->orderBy('subjects.name')
-            ->get(['subjects.uuid', 'subjects.name', 'subjects.slug', 'subjects.description', 'subjects.id']);
+            ->orderBy('name')
+            ->get(['uuid', 'name', 'slug', 'description', 'id']);
 
         $data = $subjects->map(function (Subject $subject) {
             return [
