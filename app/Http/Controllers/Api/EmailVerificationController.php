@@ -150,8 +150,8 @@ class EmailVerificationController extends Controller
     /**
      * Resend OTP.
      */
-    public function resendOtp(Request $request)
+    public function resendOtp(Request $request, OtpRateLimiter $rateLimiter)
     {
-        return $this->sendOtp($request);
+        return $this->sendOtp($request, $rateLimiter);
     }
 }
