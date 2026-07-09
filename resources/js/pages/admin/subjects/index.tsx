@@ -85,7 +85,7 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
         name: '',
         description: '',
         exam_types: [] as string[],
-        department_id: null as number | null,
+        department_ids: [] as number[],
         is_active: true,
     });
 
@@ -101,7 +101,7 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
             .some((cat) => cat.flow_type === 'departmental');
 
         if (!stillHasDepartmental) {
-            createForm.setData('department_id', null);
+            createForm.setData('department_ids', []);
         }
     };
 
@@ -529,26 +529,24 @@ export default function SubjectsIndex({ subjects, departments, examCategories, f
                             </div>
                             {hasDepartmentalFlow && (
                                 <div className="space-y-2">
-                                    <Label htmlFor="create-department">Department *</Label>
-                                    <Select
-                                        value={createForm.data.department_id?.toString() || ''}
-                                        onValueChange={(value) =>
-                                            createForm.setData('department_id', value ? parseInt(value) : null)
+                                    <Label htmlFor="create-department">Departments *</Label>
+                                    <MultiSelect
+                                        id="create-department"
+                                        options={departments.map((dept) => ({
+                                            value: dept.id.toString(),
+                                            label: dept.name,
+                                        }))}
+                                        value={createForm.data.department_ids.map(String)}
+                                        onChange={(values) =>
+                                            createForm.setData(
+                                                'department_ids',
+                                                values.map((value) => parseInt(value, 10)),
+                                            )
                                         }
-                                    >
-                                        <SelectTrigger id="create-department">
-                                            <SelectValue placeholder="Select a department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {departments.map((dept) => (
-                                                <SelectItem key={dept.id} value={dept.id.toString()}>
-                                                    {dept.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    {createForm.errors.department_id && (
-                                        <p className="text-sm text-red-500">{createForm.errors.department_id}</p>
+                                        placeholder="Select departments"
+                                    />
+                                    {createForm.errors.department_ids && (
+                                        <p className="text-sm text-red-500">{createForm.errors.department_ids}</p>
                                     )}
                                 </div>
                             )}

@@ -31,7 +31,7 @@ import { useEffect } from 'react';
 interface Subject {
     id: number;
     name: string;
-    department_id: number | null;
+    department_ids: number[];
     exam_types: string[] | null;
 }
 
@@ -134,7 +134,7 @@ export default function CreateQuestion({
     );
 
     const filteredSubjects = data.department_id
-        ? subjects.filter((subject) => subject.department_id === data.department_id)
+        ? subjects.filter((subject) => subject.department_ids.includes(data.department_id!))
         : subjects;
 
     const testsForSubject = hasDepartmentalFlow && data.subject_id
@@ -148,8 +148,8 @@ export default function CreateQuestion({
         setData('test_ids', []);
         setData('exam_ids', []);
         setData('exam_types', subject?.exam_types ?? []);
-        if (subject?.department_id) {
-            setData('department_id', subject.department_id);
+        if (subject?.department_ids?.length) {
+            setData('department_id', subject.department_ids[0]);
         }
     };
 

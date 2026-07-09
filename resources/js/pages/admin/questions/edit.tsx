@@ -41,7 +41,7 @@ interface Question {
 interface Subject {
     id: number;
     name: string;
-    department_id: number | null;
+    department_ids: number[];
 }
 
 interface Department {
@@ -87,9 +87,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function EditQuestion({ question, subjects, departments, subjectTests, examCategories, pastQuestionExams }: Props) {
     const initialDepartmentId =
-        question.subject?.department_id ??
-        subjects.find((s) => s.id === question.subject_id)?.department_id ??
-        null;
+        subjects.find((s) => s.id === question.subject_id)?.department_ids?.[0] ?? null;
     
     const { data, setData, patch, processing, errors } = useForm({
         department_id: initialDepartmentId,
@@ -122,7 +120,7 @@ export default function EditQuestion({ question, subjects, departments, subjectT
         : [];
 
     const filteredSubjects = hasDepartmentalFlow && data.department_id
-        ? subjects.filter(subject => subject.department_id === data.department_id)
+        ? subjects.filter((subject) => subject.department_ids.includes(data.department_id!))
         : subjects;
 
     const testsForSubject = hasDepartmentalFlow && data.subject_id

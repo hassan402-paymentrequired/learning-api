@@ -2,11 +2,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router } from '@inertiajs/react';
-import { Search, FileQuestion, Edit, Eye, ArrowLeft } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Search, FileQuestion, Edit, Eye, Link2, Building2 } from 'lucide-react';
 import admin from '@/routes/admin';
 import { type BreadcrumbItem } from '@/types';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface Department {
     id: number;
@@ -17,6 +22,12 @@ interface Department {
     subjects_count: number;
 }
 
+interface LinkedDepartment {
+    id: number;
+    name: string;
+    is_active: boolean;
+}
+
 interface Subject {
     id: number;
     name: string;
@@ -25,6 +36,19 @@ interface Subject {
     exam_types: string[] | null;
     is_active: boolean;
     questions_count: number;
+    department_ids: number[];
+    linked_departments: LinkedDepartment[];
+}
+
+interface LinkableSubject {
+    id: number;
+    name: string;
+}
+
+interface DepartmentOption {
+    id: number;
+    name: string;
+    is_active: boolean;
 }
 
 interface Props {
@@ -36,6 +60,8 @@ interface Props {
         per_page: number;
         total: number;
     };
+    linkableSubjects: LinkableSubject[];
+    allDepartments: DepartmentOption[];
     filters: {
         search: string;
         is_active: string;
@@ -57,7 +83,25 @@ function courseFilterParams(
     };
 }
 
-export default function DepartmentShow({ department, subjects, filters }: Props) {
+export default function DepartmentShow({
+    department,
+    subjects,
+    linkableSubjects,
+    allDepartments,
+    filters,
+}: Props) {
+    const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+    const [manageDialogOpen, setManageDialogOpen] = useState(false);
+    const [subjectToManage, setSubjectToManage] = useState<Subject | null>(null);
+
+    const linkForm = useForm({
+        subject_ids: [] as number[],
+    });
+
+    const manageForm = useForm({
+        department_ids: [] as number[],
+    });
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Departments', href: admin.departments.index().url },
         { title: department.name, href: '#' },
@@ -83,6 +127,49 @@ export default function DepartmentShow({ department, subjects, filters }: Props)
 
     const hasActiveFilters = filters.search !== '' || filters.is_active !== 'all';
 
+    const handleLink = (e: React.FormEvent) => {
+        e.preventDefault();
+        linkForm.post(`/admin/departments/${department.id}/link-subjects`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setLinkDialogOpen(false);
+                linkForm.reset();
+                toast.success('Courses linked successfully');
+            },
+            onError: () => {
+                toast.error('Failed to link courses');
+            },
+        });
+    };
+
+    const openManageDialog = (subject: Subject) => {
+        setSubjectToManage(subject);
+        manageForm.setData('department_ids', subject.department_ids ?? []);
+        manageForm.clearErrors();
+        setManageDialogOpen(true);
+    };
+
+    const handleManageDepartments = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!subjectToManage) return;
+
+        manageForm.patch(`/admin/subjects/${subjectToManage.id}/departments`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setManageDialogOpen(false);
+                setSubjectToManage(null);
+                manageForm.reset();
+                toast.success('Department links updated');
+            },
+            onError: () => {
+                toast.error('Failed to update department links');
+            },
+        });
+    };
+
+    const otherDepartments = (subject: Subject) =>
+        (subject.linked_departments ?? []).filter((dept) => dept.id !== department.id);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${department.name} — Courses`} />
@@ -92,7 +179,7 @@ export default function DepartmentShow({ department, subjects, filters }: Props)
                         <h1 className="text-2xl font-bold">{department.name}</h1>
                         <p className="text-muted-foreground">
                             {department.subjects_count}{' '}
-                            {department.subjects_count === 1 ? 'course' : 'courses'} in this department
+                            {department.subjects_count === 1 ? 'course' : 'courses'} linked to this department
                         </p>
                         {department.description && (
                             <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
@@ -102,16 +189,14 @@ export default function DepartmentShow({ department, subjects, filters }: Props)
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <Button variant="outline" asChild>
-                            <Link href={admin.departments.index().url}>
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Back
-                            </Link>
-                        </Button>
-                        <Button variant="outline" asChild>
                             <Link href={`/admin/departments/${department.id}/edit`}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Department
                             </Link>
+                        </Button>
+                        <Button onClick={() => setLinkDialogOpen(true)} disabled={linkableSubjects.length === 0}>
+                            <Link2 className="mr-2 h-4 w-4" />
+                            Link Course
                         </Button>
                     </div>
                 </div>
@@ -213,15 +298,48 @@ export default function DepartmentShow({ department, subjects, filters }: Props)
                                             {subject.questions_count !== 1 ? 's' : ''}
                                         </span>
                                     </div>
+                                    {(subject.linked_departments?.length ?? 0) > 0 && (
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-medium text-muted-foreground">Also in</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {otherDepartments(subject).length > 0 ? (
+                                                    otherDepartments(subject).map((dept) => (
+                                                        <Link
+                                                            key={dept.id}
+                                                            href={`/admin/departments/${dept.id}`}
+                                                            className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs hover:bg-muted/80"
+                                                        >
+                                                            {dept.name}
+                                                            {!dept.is_active && ' (inactive)'}
+                                                        </Link>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        No other departments
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex gap-2 pt-1">
                                         <Button variant="default" size="sm" asChild className="flex-1">
                                             <Link href={`/admin/departments/${department.id}/courses/${subject.id}`}>
                                                 <Eye className="mr-2 h-4 w-4" />
-                                                View Course
+                                                View
                                             </Link>
                                         </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => openManageDialog(subject)}
+                                            title="Manage department links"
+                                        >
+                                            <Building2 className="h-4 w-4" />
+                                        </Button>
                                         <Button variant="outline" size="sm" asChild>
-                                            <Link href={admin.subjects.edit(subject.id).url}>
+                                            <Link
+                                                href={`${admin.subjects.edit(subject.id).url}?return_to=${encodeURIComponent(showUrl)}`}
+                                            >
                                                 <Edit className="h-4 w-4" />
                                             </Link>
                                         </Button>
@@ -240,9 +358,10 @@ export default function DepartmentShow({ department, subjects, filters }: Props)
                                     ? 'No courses match your filters.'
                                     : 'No courses are linked to this department yet.'}
                             </p>
-                            {!hasActiveFilters && (
-                                <Button className="mt-4" asChild>
-                                    <Link href={admin.subjects.index().url}>Manage Subjects</Link>
+                            {!hasActiveFilters && linkableSubjects.length > 0 && (
+                                <Button className="mt-4" onClick={() => setLinkDialogOpen(true)}>
+                                    <Link2 className="mr-2 h-4 w-4" />
+                                    Link Course
                                 </Button>
                             )}
                         </CardContent>
@@ -276,6 +395,111 @@ export default function DepartmentShow({ department, subjects, filters }: Props)
                         </div>
                     </div>
                 )}
+
+                <Dialog
+                    open={linkDialogOpen}
+                    onOpenChange={(open) => {
+                        setLinkDialogOpen(open);
+                        if (!open) {
+                            linkForm.reset();
+                            linkForm.clearErrors();
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Link Courses</DialogTitle>
+                            <DialogDescription>
+                                Select existing courses to add to {department.name}. Questions stay shared — nothing is duplicated.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleLink} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="link-subjects">Courses</Label>
+                                <MultiSelect
+                                    id="link-subjects"
+                                    options={linkableSubjects.map((subject) => ({
+                                        value: subject.id.toString(),
+                                        label: subject.name,
+                                    }))}
+                                    value={linkForm.data.subject_ids.map(String)}
+                                    onChange={(values) =>
+                                        linkForm.setData(
+                                            'subject_ids',
+                                            values.map((value) => parseInt(value, 10)),
+                                        )
+                                    }
+                                    placeholder="Select courses to link"
+                                />
+                                {linkForm.errors.subject_ids && (
+                                    <p className="text-sm text-red-500">{linkForm.errors.subject_ids}</p>
+                                )}
+                            </div>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setLinkDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={linkForm.processing || linkForm.data.subject_ids.length === 0}>
+                                    <Link2 className="mr-2 h-4 w-4" />
+                                    {linkForm.processing ? 'Linking...' : 'Link Courses'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog
+                    open={manageDialogOpen}
+                    onOpenChange={(open) => {
+                        setManageDialogOpen(open);
+                        if (!open) {
+                            setSubjectToManage(null);
+                            manageForm.reset();
+                            manageForm.clearErrors();
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Manage Departments</DialogTitle>
+                            <DialogDescription>
+                                Choose which departments "{subjectToManage?.name}" belongs to. You can link it to multiple departments or remove it from this one by unchecking "{department.name}".
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleManageDepartments} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="manage-departments">Departments</Label>
+                                <MultiSelect
+                                    id="manage-departments"
+                                    options={allDepartments.map((dept) => ({
+                                        value: dept.id.toString(),
+                                        label: dept.is_active ? dept.name : `${dept.name} (inactive)`,
+                                    }))}
+                                    value={manageForm.data.department_ids.map(String)}
+                                    onChange={(values) =>
+                                        manageForm.setData(
+                                            'department_ids',
+                                            values.map((value) => parseInt(value, 10)),
+                                        )
+                                    }
+                                    placeholder="Select departments"
+                                />
+                                {manageForm.errors.department_ids && (
+                                    <p className="text-sm text-red-500">{manageForm.errors.department_ids}</p>
+                                )}
+                            </div>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setManageDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={manageForm.processing}>
+                                    <Building2 className="mr-2 h-4 w-4" />
+                                    {manageForm.processing ? 'Saving...' : 'Save Links'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

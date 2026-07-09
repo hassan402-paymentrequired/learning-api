@@ -118,22 +118,26 @@ class SubjectController extends Controller
             'description' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required',
-            'department_id' => 'nullable|exists:departments,id',
+            'department_ids' => 'nullable|array',
+            'department_ids.*' => 'exists:departments,id',
             'is_active' => 'boolean',
         ]);
 
         $validated['exam_types'] = $resolver->normalizeToSlugs($validated['exam_types']);
         $validated['is_active'] = $validated['is_active'] ?? true;
+        $departmentIds = $validated['department_ids'] ?? [];
+        unset($validated['department_ids']);
 
         if ($resolver->requiresDepartment($validated['exam_types'])) {
-            if (empty($validated['department_id'])) {
+            if (empty($departmentIds)) {
                 return redirect()->back()
-                    ->withErrors(['department_id' => 'Department is required for departmental exam categories.'])
+                    ->withErrors(['department_ids' => 'At least one department is required for departmental exam categories.'])
                     ->withInput();
             }
         }
 
         $subject = Subject::create($validated);
+        $subject->departments()->sync($departmentIds);
 
         return redirect()->route('admin.subjects.index')
             ->with('success', 'Subject created successfully.');
@@ -142,20 +146,30 @@ class SubjectController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Subject $subject)
+    public function edit(Request $request, Subject $subject)
     {
-        $departments = \App\Models\Department::where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        $subject->load('departments:id,name,is_active');
+
+        $departments = \App\Models\Department::orderBy('name')
+            ->get(['id', 'name', 'is_active']);
 
         $examCategories = \App\Models\ExamCategory::where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+            ->get(['id', 'name', 'slug', 'flow_type']);
 
         return Inertia::render('admin/subjects/edit', [
-            'subject' => $subject,
+            'subject' => [
+                ...$subject->toArray(),
+                'department_ids' => $subject->departments->pluck('id')->values(),
+                'linked_departments' => $subject->departments->map(fn ($dept) => [
+                    'id' => $dept->id,
+                    'name' => $dept->name,
+                    'is_active' => $dept->is_active,
+                ])->values(),
+            ],
             'departments' => $departments,
             'examCategories' => $examCategories,
+            'returnTo' => $request->query('return_to'),
         ]);
     }
 
@@ -169,24 +183,43 @@ class SubjectController extends Controller
             'description' => 'nullable|string',
             'exam_types' => 'required|array|min:1',
             'exam_types.*' => 'required',
-            'department_id' => 'nullable|exists:departments,id',
+            'department_ids' => 'nullable|array',
+            'department_ids.*' => 'exists:departments,id',
             'is_active' => 'boolean',
         ]);
 
         $validated['exam_types'] = $resolver->normalizeToSlugs($validated['exam_types']);
+        $departmentIds = $validated['department_ids'] ?? [];
+        unset($validated['department_ids']);
 
         if ($resolver->requiresDepartment($validated['exam_types'])) {
-            if (empty($validated['department_id'])) {
+            if (empty($departmentIds)) {
                 return redirect()->back()
-                    ->withErrors(['department_id' => 'Department is required for departmental exam categories.'])
+                    ->withErrors(['department_ids' => 'At least one department is required for departmental exam categories.'])
                     ->withInput();
             }
         }
 
         $subject->update($validated);
+        $subject->departments()->sync($departmentIds);
 
         return redirect()->route('admin.subjects.index')
             ->with('success', 'Subject updated successfully.');
+    }
+
+    /**
+     * Sync which departments a course belongs to.
+     */
+    public function syncDepartments(Request $request, Subject $subject)
+    {
+        $validated = $request->validate([
+            'department_ids' => 'present|array',
+            'department_ids.*' => 'exists:departments,id',
+        ]);
+
+        $subject->departments()->sync($validated['department_ids']);
+
+        return back()->with('success', 'Department links updated successfully.');
     }
 
     /**

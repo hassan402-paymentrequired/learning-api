@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 
 class Department extends Model
@@ -24,11 +24,11 @@ class Department extends Model
     ];
 
     /**
-     * Get the subjects for the department.
+     * Courses linked to this department.
      */
-    public function subjects(): HasMany
+    public function subjects(): BelongsToMany
     {
-        return $this->hasMany(Subject::class);
+        return $this->belongsToMany(Subject::class, 'department_subject')->withTimestamps();
     }
 
     protected static function boot()

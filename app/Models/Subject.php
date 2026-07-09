@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -20,7 +20,6 @@ class Subject extends Model
         'exam_types',
         'is_active',
         'order',
-        'department_id',
     ];
 
     protected $casts = [
@@ -30,11 +29,11 @@ class Subject extends Model
     ];
 
     /**
-     * Get the department that owns the subject.
+     * Departments this course belongs to.
      */
-    public function department(): BelongsTo
+    public function departments(): BelongsToMany
     {
-        return $this->belongsTo(Department::class);
+        return $this->belongsToMany(Department::class, 'department_subject')->withTimestamps();
     }
 
     /**

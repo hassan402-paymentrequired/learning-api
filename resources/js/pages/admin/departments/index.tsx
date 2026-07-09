@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, router, useForm } from '@inertiajs/react';
-import { Plus, Search, Power, PowerOff, Trash2, Edit, MoreVertical, Save, Eye } from 'lucide-react';
+import { Plus, Search, Power, PowerOff, Trash2, Edit, MoreVertical, Save, Eye, Copy } from 'lucide-react';
 import { useState } from 'react';
 import admin from '@/routes/admin';
 import { Link } from '@inertiajs/react';
@@ -44,12 +44,18 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
     const [isActive, setIsActive] = useState(filters.is_active || '');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
     const [departmentToDelete, setDepartmentToDelete] = useState<{ id: number; name: string } | null>(null);
+    const [departmentToDuplicate, setDepartmentToDuplicate] = useState<{ id: number; name: string } | null>(null);
 
     const createForm = useForm({
         name: '',
         description: '',
         is_active: true,
+    });
+
+    const duplicateForm = useForm({
+        name: '',
     });
 
     const handleCreate = (e: React.FormEvent) => {
@@ -90,6 +96,31 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
     const handleDelete = (departmentId: number, departmentName: string) => {
         setDepartmentToDelete({ id: departmentId, name: departmentName });
         setDeleteDialogOpen(true);
+    };
+
+    const openDuplicateDialog = (departmentId: number, departmentName: string) => {
+        setDepartmentToDuplicate({ id: departmentId, name: departmentName });
+        duplicateForm.setData('name', `${departmentName} (Copy)`);
+        duplicateForm.clearErrors();
+        setDuplicateDialogOpen(true);
+    };
+
+    const handleDuplicate = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!departmentToDuplicate) return;
+
+        duplicateForm.post(`/admin/departments/${departmentToDuplicate.id}/duplicate`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setDuplicateDialogOpen(false);
+                setDepartmentToDuplicate(null);
+                duplicateForm.reset();
+                toast.success('Department duplicated successfully');
+            },
+            onError: () => {
+                toast.error('Failed to duplicate department');
+            },
+        });
     };
 
     const confirmDelete = () => {
@@ -262,6 +293,12 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
                                                     </>
                                                 )}
                                             </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={() => openDuplicateDialog(department.id, department.name)}
+                                            >
+                                                <Copy className="mr-2 h-4 w-4" />
+                                                Duplicate
+                                            </DropdownMenuItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem
                                                 onClick={() => handleDelete(department.id, department.name)}
@@ -389,6 +426,57 @@ export default function DepartmentsIndex({ departments, filters }: Props) {
                                 <Button type="submit" disabled={createForm.processing}>
                                     <Save className="mr-2 h-4 w-4" />
                                     {createForm.processing ? 'Creating...' : 'Create'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Duplicate Dialog */}
+                <Dialog
+                    open={duplicateDialogOpen}
+                    onOpenChange={(open) => {
+                        setDuplicateDialogOpen(open);
+                        if (!open) {
+                            setDepartmentToDuplicate(null);
+                            duplicateForm.reset();
+                            duplicateForm.clearErrors();
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Duplicate Department</DialogTitle>
+                            <DialogDescription>
+                                Create a copy of "{departmentToDuplicate?.name}" with the same courses linked.
+                                No courses or questions are duplicated.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleDuplicate} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="duplicate-name">Department Name *</Label>
+                                <Input
+                                    id="duplicate-name"
+                                    value={duplicateForm.data.name}
+                                    onChange={(e) => duplicateForm.setData('name', e.target.value)}
+                                    placeholder="e.g., Business Administration Year 2"
+                                    required
+                                />
+                                {duplicateForm.errors.name && (
+                                    <p className="text-sm text-red-500">{duplicateForm.errors.name}</p>
+                                )}
+                            </div>
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setDuplicateDialogOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={duplicateForm.processing}>
+                                    <Copy className="mr-2 h-4 w-4" />
+                                    {duplicateForm.processing ? 'Duplicating...' : 'Duplicate'}
                                 </Button>
                             </DialogFooter>
                         </form>

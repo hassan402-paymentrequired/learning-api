@@ -76,13 +76,13 @@ class QuestionController extends Controller
     public function create(Request $request, ExamCategoryResolver $resolver)
     {
         $subjects = Subject::where('is_active', true)
-            ->with('department:id,name')
+            ->with('departments:id')
             ->orderBy('name')
-            ->get(['id', 'name', 'department_id', 'exam_types'])
+            ->get(['id', 'name', 'exam_types'])
             ->map(fn (Subject $subject) => [
                 'id' => $subject->id,
                 'name' => $subject->name,
-                'department_id' => $subject->department_id,
+                'department_ids' => $subject->departments->pluck('id')->values()->all(),
                 'exam_types' => $resolver->normalizeToSlugs($subject->exam_types ?? []),
             ]);
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
@@ -102,10 +102,10 @@ class QuestionController extends Controller
         ];
 
         if ($request->filled('subject_id')) {
-            $subject = Subject::where('is_active', true)->find($request->subject_id);
+            $subject = Subject::where('is_active', true)->with('departments:id')->find($request->subject_id);
             if ($subject) {
                 $defaults['subject_id'] = (string) $subject->id;
-                $defaults['department_id'] = $subject->department_id;
+                $defaults['department_id'] = $subject->departments->first()?->id;
                 $defaults['exam_types'] = $resolver->normalizeToSlugs($subject->exam_types ?? []);
             }
         } elseif ($request->filled('department_id')) {
@@ -297,15 +297,15 @@ class QuestionController extends Controller
      */
     public function edit(Question $question, ExamCategoryResolver $resolver)
     {
-        $question->load('answers', 'subject', 'subject.department', 'subjectTests', 'exams:id,title,year,subject');
+        $question->load('answers', 'subject.departments', 'subjectTests', 'exams:id,title,year,subject');
         $subjects = Subject::where('is_active', true)
-            ->with('department:id,name')
+            ->with('departments:id')
             ->orderBy('name')
-            ->get(['id', 'name', 'department_id', 'exam_types'])
+            ->get(['id', 'name', 'exam_types'])
             ->map(fn (Subject $subject) => [
                 'id' => $subject->id,
                 'name' => $subject->name,
-                'department_id' => $subject->department_id,
+                'department_ids' => $subject->departments->pluck('id')->values()->all(),
                 'exam_types' => $resolver->normalizeToSlugs($subject->exam_types ?? []),
             ]);
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);

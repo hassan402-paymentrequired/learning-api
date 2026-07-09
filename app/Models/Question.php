@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasPublicUuid;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -70,6 +71,36 @@ class Question extends Model
     {
         return $this->belongsToMany(ExamCategory::class, 'exam_category_question')
             ->withTimestamps();
+    }
+
+    /**
+     * Questions owned by a subject or linked to one of its tests.
+     */
+    public function scopeAccessibleForSubject(Builder $query, Subject $subject): Builder
+    {
+        return $query->where(function (Builder $q) use ($subject) {
+            $q->where('subject_id', $subject->id)
+                ->orWhereHas('subjectTests', function (Builder $testQuery) use ($subject) {
+                    $testQuery->where('subject_id', $subject->id);
+                });
+        });
+    }
+
+    /**
+     * Practice questions for a subject, optionally scoped to a specific test.
+     */
+    public function scopeForSubjectPractice(
+        Builder $query,
+        Subject $subject,
+        ?SubjectTest $subjectTest = null
+    ): Builder {
+        if ($subjectTest) {
+            return $query->whereHas('subjectTests', function (Builder $testQuery) use ($subjectTest) {
+                $testQuery->where('subject_tests.id', $subjectTest->id);
+            });
+        }
+
+        return $query->where('subject_id', $subject->id);
     }
 
     /**

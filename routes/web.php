@@ -98,6 +98,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{department}', [App\Http\Controllers\Admin\DepartmentController::class, 'show'])->name('show');
             Route::patch('/{department}', [App\Http\Controllers\Admin\DepartmentController::class, 'update'])->name('update');
             Route::post('/{department}/toggle-active', [App\Http\Controllers\Admin\DepartmentController::class, 'toggleActive'])->name('toggle-active');
+            Route::post('/{department}/duplicate', [App\Http\Controllers\Admin\DepartmentController::class, 'duplicate'])->name('duplicate');
+            Route::post('/{department}/link-subjects', [App\Http\Controllers\Admin\DepartmentController::class, 'linkSubjects'])->name('link-subjects');
+            Route::delete('/{department}/courses/{subject}', [App\Http\Controllers\Admin\DepartmentController::class, 'unlinkSubject'])->name('courses.unlink');
             Route::delete('/{department}', [App\Http\Controllers\Admin\DepartmentController::class, 'destroy'])->name('destroy');
         });
 
@@ -125,6 +128,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{subject}/tests/{subject_test}', [App\Http\Controllers\Admin\SubjectTestController::class, 'destroy'])->name('tests.destroy');
             Route::get('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'show'])->name('show');
             Route::get('/{subject}/edit', [App\Http\Controllers\Admin\SubjectController::class, 'edit'])->name('edit');
+            Route::patch('/{subject}/departments', [App\Http\Controllers\Admin\SubjectController::class, 'syncDepartments'])->name('sync-departments');
             Route::patch('/{subject}', [App\Http\Controllers\Admin\SubjectController::class, 'update'])->name('update');
             Route::post('/{subject}/toggle-active', [App\Http\Controllers\Admin\SubjectController::class, 'toggleActive'])->name('toggle-active');
             Route::post('/bulk-update', [App\Http\Controllers\Admin\SubjectController::class, 'bulkUpdate'])->name('bulk-update');

@@ -153,15 +153,16 @@ class ExamAttemptController extends Controller
             $subjectModel = Subject::where('name', $subjectName)->first();
             if (!$subjectModel) continue;
 
-            $query = Question::where('subject_id', $subjectModel->id);
-            $resolver->applyQuestionExamTypeFilter($query, $examType);
-
+            $subjectTest = null;
             if ($subjectTestUuid) {
                 $subjectTest = PublicUuidLookup::findOrFail(SubjectTest::class, $subjectTestUuid);
-                $query->whereHas('subjectTests', function ($q) use ($subjectTest) {
-                    $q->where('subject_tests.id', $subjectTest->id);
-                });
+                if ($subjectTest->subject_id !== $subjectModel->id) {
+                    continue;
+                }
             }
+
+            $query = Question::forSubjectPractice($subjectModel, $subjectTest);
+            $resolver->applyQuestionExamTypeFilter($query, $examType);
 
             if ($year) {
                 $query->whereHas('exams', function ($q) use ($year) {

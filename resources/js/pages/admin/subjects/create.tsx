@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link,  useForm } from '@inertiajs/react';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -32,7 +32,7 @@ export default function CreateSubject({ departments, examCategories }: Props) {
         name: '',
         description: '',
         exam_types: [] as string[],
-        department_id: null as number | null,
+        department_ids: [] as number[],
         is_active: true,
     });
 
@@ -117,7 +117,7 @@ export default function CreateSubject({ departments, examCategories }: Props) {
                                                             .some(cat => cat.flow_type === 'departmental');
                                                         
                                                         if (!stillHasDepartmental) {
-                                                            setData('department_id', null);
+                                                            setData('department_ids', []);
                                                         }
                                                     }
                                                 }}
@@ -138,27 +138,27 @@ export default function CreateSubject({ departments, examCategories }: Props) {
 
                             {hasDepartmentalFlow && (
                                 <div className="space-y-2">
-                                    <Label htmlFor="department_id">Department *</Label>
-                                    <Select
-                                        value={data.department_id?.toString() || ''}
-                                        onValueChange={(value) => setData('department_id', value ? parseInt(value) : null)}
-                                    >
-                                        <SelectTrigger id="department_id">
-                                            <SelectValue placeholder="Select a department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {departments.map((dept) => (
-                                                <SelectItem key={dept.id} value={dept.id.toString()}>
-                                                    {dept.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="department_ids">Departments *</Label>
+                                    <MultiSelect
+                                        id="department_ids"
+                                        options={departments.map((dept) => ({
+                                            value: dept.id.toString(),
+                                            label: dept.name,
+                                        }))}
+                                        value={data.department_ids.map(String)}
+                                        onChange={(values) =>
+                                            setData(
+                                                'department_ids',
+                                                values.map((value) => parseInt(value, 10)),
+                                            )
+                                        }
+                                        placeholder="Select departments"
+                                    />
                                     <p className="text-xs text-muted-foreground">
-                                        Department is required for DLI/Unilag subjects.
+                                        A course can belong to multiple departments (e.g. Year 1 and Year 2).
                                     </p>
-                                    {errors.department_id && (
-                                        <p className="text-sm text-red-500">{errors.department_id}</p>
+                                    {errors.department_ids && (
+                                        <p className="text-sm text-red-500">{errors.department_ids}</p>
                                     )}
                                 </div>
                             )}

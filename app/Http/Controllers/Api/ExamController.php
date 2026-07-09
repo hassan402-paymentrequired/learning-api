@@ -309,16 +309,20 @@ class ExamController extends Controller
 
         // OPTIMIZATION: Use database-level filtering and bulk operations
         // Step 1: Get question IDs first (lightweight query)
-        $query = Question::where('subject_id', $subjectModel->id);
-        $resolver->applyQuestionExamTypeFilter($query, $examType);
-
-        // When subject_test_uuid provided (DLI), filter to questions belonging to that test
+        $subjectTest = null;
         if ($subjectTestUuid) {
             $subjectTest = PublicUuidLookup::findOrFail(\App\Models\SubjectTest::class, $subjectTestUuid);
-            $query->whereHas('subjectTests', function ($q) use ($subjectTest) {
-                $q->where('subject_tests.id', $subjectTest->id);
-            });
+            if ($subjectTest->subject_id !== $subjectModel->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The selected test does not belong to this course.',
+                    'data' => [],
+                ], 404);
+            }
         }
+
+        $query = Question::forSubjectPractice($subjectModel, $subjectTest);
+        $resolver->applyQuestionExamTypeFilter($query, $examType);
 
         $questionIds = $query->inRandomOrder()
             ->limit($count)
@@ -525,16 +529,16 @@ class ExamController extends Controller
             abort(404);
         }
 
-        $subjectsQuery = Subject::where('is_active', true)
-            ->where('department_id', $department->id);
+        $subjectsQuery = $department->subjects()
+            ->where('subjects.is_active', true);
 
         $resolver->applySubjectExamTypeFilter($subjectsQuery, $request->exam_type);
 
         $subjects = $subjectsQuery
             ->with('tests:uuid,subject_id,name')
             ->withCount('questions')
-            ->orderBy('name')
-            ->get(['uuid', 'name', 'slug', 'description']);
+            ->orderBy('subjects.name')
+            ->get(['subjects.uuid', 'subjects.name', 'subjects.slug', 'subjects.description', 'subjects.id']);
 
         $data = $subjects->map(function (Subject $subject) {
             return [
