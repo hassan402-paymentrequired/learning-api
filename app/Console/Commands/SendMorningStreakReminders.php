@@ -5,10 +5,9 @@ namespace App\Console\Commands;
 use App\Models\User;
 use App\Models\UserStreak;
 use App\Services\PushNotificationBudget;
-use App\Services\WebPushService;
+use App\Services\UserPushNotifier;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 
 class SendMorningStreakReminders extends Command
 {
@@ -16,23 +15,20 @@ class SendMorningStreakReminders extends Command
 
     protected $description = 'Send morning push reminders to users who have not practiced today';
 
-    public function handle(WebPushService $webPush, PushNotificationBudget $pushBudget): int
+    public function handle(UserPushNotifier $pushNotifier, PushNotificationBudget $pushBudget): int
     {
-        if (! $webPush->isConfigured()) {
-            $this->warn('VAPID keys not configured. Skipping morning reminders.');
-
-            return self::SUCCESS;
-        }
-
         $sent = 0;
 
         User::query()
             ->where('push_notifications_enabled', true)
-            ->whereHas('pushSubscriptions')
-            ->with('pushSubscriptions')
-            ->chunkById(100, function ($users) use ($webPush, $pushBudget, &$sent) {
+            ->where(function ($query) {
+                $query->whereHas('pushSubscriptions')
+                    ->orWhereHas('devicePushTokens');
+            })
+            ->with(['pushSubscriptions', 'devicePushTokens'])
+            ->chunkById(100, function ($users) use ($pushNotifier, $pushBudget, &$sent) {
                 foreach ($users as $user) {
-                    if ($this->sendReminderIfDue($user, $webPush, $pushBudget)) {
+                    if ($this->sendReminderIfDue($user, $pushNotifier, $pushBudget)) {
                         $sent++;
                     }
                 }
@@ -43,8 +39,11 @@ class SendMorningStreakReminders extends Command
         return self::SUCCESS;
     }
 
-    private function sendReminderIfDue(User $user, WebPushService $webPush, PushNotificationBudget $pushBudget): bool
-    {
+    private function sendReminderIfDue(
+        User $user,
+        UserPushNotifier $pushNotifier,
+        PushNotificationBudget $pushBudget
+    ): bool {
         $timezone = $user->timezone ?: 'Africa/Lagos';
         $now = Carbon::now($timezone);
         $today = $now->toDateString();
@@ -87,26 +86,18 @@ class SendMorningStreakReminders extends Command
             'url' => '/dashboard',
         ];
 
-        $delivered = false;
-
-        foreach ($user->pushSubscriptions as $subscription) {
-            if ($webPush->send($subscription, $payload)) {
-                $delivered = true;
-            }
-        }
+        $delivered = $pushNotifier->send($user, $payload);
 
         if ($delivered) {
             $pushBudget->recordSent($user, $timezone);
-        } else {
-            Log::warning('Morning reminder not delivered', ['user_id' => $user->id]);
         }
 
         return $delivered;
     }
 
-  /**
-   * @param  array<int, string>  $streakDates
-   */
+    /**
+     * @param  array<int, string>  $streakDates
+     */
     private function estimateCurrentStreak(array $streakDates, string $today, string $timezone): int
     {
         if (empty($streakDates)) {

@@ -95,6 +95,11 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(PushSubscription::class);
     }
 
+    public function devicePushTokens()
+    {
+        return $this->hasMany(DevicePushToken::class);
+    }
+
     /**
      * Get the subscriptions for the user.
      */

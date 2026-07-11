@@ -3,37 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\PushSubscription;
-use App\Services\WebPushService;
+use App\Models\DevicePushToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
-class PushSubscriptionController extends Controller
+class DevicePushTokenController extends Controller
 {
-    public function vapidPublicKey(WebPushService $webPush)
-    {
-        if (! $webPush->isConfigured()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Push notifications are not configured.',
-            ], 503);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'public_key' => $webPush->publicKey(),
-            ],
-        ]);
-    }
-
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'endpoint' => 'required|string',
-            'keys' => 'required|array',
-            'keys.p256dh' => 'required|string',
-            'keys.auth' => 'required|string',
+            'token' => 'required|string|max:255',
+            'platform' => 'nullable|string|in:ios,android',
             'timezone' => 'nullable|string|timezone:all',
         ]);
 
@@ -44,36 +24,41 @@ class PushSubscriptionController extends Controller
             ], 422);
         }
 
+        if (! DevicePushToken::isValidExpoToken($request->token)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid Expo push token.',
+            ], 422);
+        }
+
         $user = auth()->user();
         $timezone = $request->input('timezone', $user->timezone);
 
-        PushSubscription::updateOrCreate(
-            ['endpoint_hash' => hash('sha256', $request->endpoint)],
+        DevicePushToken::updateOrCreate(
+            ['token_hash' => hash('sha256', $request->token)],
             [
                 'user_id' => $user->id,
-                'endpoint' => $request->endpoint,
-                'p256dh' => $request->input('keys.p256dh'),
-                'auth' => $request->input('keys.auth'),
-                'user_agent' => $request->userAgent(),
+                'token' => $request->token,
+                'platform' => $request->input('platform'),
                 'timezone' => $timezone,
             ]
         );
 
         $user->update([
             'push_notifications_enabled' => true,
-            'timezone' => $timezone,
+            'timezone' => $timezone ?: $user->timezone,
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Push subscription saved.',
+            'message' => 'Device push token saved.',
         ], 201);
     }
 
     public function destroy(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'endpoint' => 'required|string',
+            'token' => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -83,8 +68,8 @@ class PushSubscriptionController extends Controller
             ], 422);
         }
 
-        PushSubscription::where('user_id', auth()->id())
-            ->where('endpoint_hash', hash('sha256', $request->endpoint))
+        DevicePushToken::where('user_id', auth()->id())
+            ->where('token_hash', hash('sha256', $request->token))
             ->delete();
 
         $user = auth()->user();
@@ -97,7 +82,7 @@ class PushSubscriptionController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Push subscription removed.',
+            'message' => 'Device push token removed.',
         ]);
     }
 }

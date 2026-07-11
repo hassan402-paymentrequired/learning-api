@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\ExamCategoryController;
 use App\Http\Controllers\Api\MarketingUnsubscribeController;
 use App\Http\Controllers\Api\NotificationSettingsController;
 use App\Http\Controllers\Api\PushSubscriptionController;
+use App\Http\Controllers\Api\DevicePushTokenController;
 use App\Http\Controllers\Api\WaitlistController;
 
 /*
@@ -129,6 +130,8 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     // Push notifications
     Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
+    Route::post('/device-push-tokens', [DevicePushTokenController::class, 'store']);
+    Route::delete('/device-push-tokens', [DevicePushTokenController::class, 'destroy']);
     Route::get('/notification-settings', [NotificationSettingsController::class, 'show']);
     Route::put('/notification-settings', [NotificationSettingsController::class, 'update']);
 });

@@ -42,6 +42,7 @@ class NotificationSettingsController extends Controller
 
             if (! $user->push_notifications_enabled) {
                 $user->pushSubscriptions()->delete();
+                $user->devicePushTokens()->delete();
             }
         }
 
@@ -79,7 +80,8 @@ class NotificationSettingsController extends Controller
             'push_notifications_enabled' => (bool) $user->push_notifications_enabled,
             'morning_reminder_time' => $user->morning_reminder_time ?? '07:00',
             'timezone' => $user->timezone ?? 'Africa/Lagos',
-            'has_push_subscription' => $user->pushSubscriptions()->exists(),
+            'has_push_subscription' => $user->pushSubscriptions()->exists()
+                || $user->devicePushTokens()->exists(),
             'subscription_reminder_emails_enabled' => (bool) ($user->subscription_reminder_emails_enabled ?? true),
             'marketing_emails_enabled' => (bool) ($user->marketing_emails_enabled ?? false),
         ];
