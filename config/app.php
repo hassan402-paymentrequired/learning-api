@@ -123,5 +123,5 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    'frontend_url' => env('FRONTEND_URL'),
+    'frontend_url' => env('FRONTEND_URL', 'https://stepra.com.ng'),
 ];
