@@ -313,9 +313,49 @@ class SubscriptionController extends Controller
             $subscriptionEmail->sendReceipt($subscription->fresh());
         }
 
-        // Return success page (WebView will detect navigation to this URL)
-        return response('<!DOCTYPE html><html><head><title>Payment Successful</title></head><body><h1>Payment Successful</h1><p>Your subscription has been activated. You can close this window.</p></body></html>', 200)
-            ->header('Content-Type', 'text/html');
+        $frontendUrl = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $redirectUrl = $frontendUrl.'/subscription?reference='.urlencode($reference);
+        $safeReference = json_encode($reference);
+        $safeFrontendOrigin = json_encode($frontendUrl);
+        $safeRedirectUrl = json_encode($redirectUrl);
+
+        // Notify popup opener (web) and redirect same-window users back to the app.
+        // Mobile WebView detects this /subscriptions/callback URL before the redirect runs.
+        $html = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Payment Successful</title>
+</head>
+<body>
+  <h1>Payment Successful</h1>
+  <p>Your subscription has been activated. You can close this window.</p>
+  <script>
+    (function () {
+      var reference = {$safeReference};
+      var frontendOrigin = {$safeFrontendOrigin};
+      var redirectUrl = {$safeRedirectUrl};
+
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage(
+            { type: 'payment_success', reference: reference },
+            frontendOrigin
+          );
+        } catch (e) {}
+        setTimeout(function () { window.close(); }, 400);
+        return;
+      }
+
+      window.location.replace(redirectUrl);
+    })();
+  </script>
+</body>
+</html>
+HTML;
+
+        return response($html, 200)->header('Content-Type', 'text/html');
     }
 
     /**
