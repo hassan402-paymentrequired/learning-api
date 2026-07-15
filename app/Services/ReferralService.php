@@ -49,11 +49,14 @@ class ReferralService
         return max(0, $this->totalEarnings($user) - $this->reservedWithdrawalTotal($user));
     }
 
+    public function frontendBaseUrl(): string
+    {
+        return rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/');
+    }
+
     public function referralUrl(User $user): string
     {
-        $base = rtrim(config('app.frontend_url', config('app.url')), '/');
-
-        return "{$base}/authenticate/register?ref={$user->referral_code}";
+        return $this->frontendBaseUrl() . '/authenticate/register?ref=' . $user->referral_code;
     }
 
     /**
@@ -112,8 +115,13 @@ class ReferralService
     /**
      * @return array{success: bool, message: string, withdrawal?: ReferralWithdrawal}
      */
-    public function requestWithdrawal(User $user, float $amount, string $phoneNumber, string $network): array
-    {
+    public function requestWithdrawal(
+        User $user,
+        float $amount,
+        string $accountName,
+        string $accountNumber,
+        string $bankName
+    ): array {
         $minAmount = $this->minWithdrawalAmount();
         $available = $this->availableBalance($user);
 
@@ -127,7 +135,7 @@ class ReferralService
         if ($amount > $available) {
             return [
                 'success' => false,
-                'message' => 'Insufficient credit balance for this withdrawal.',
+                'message' => 'Insufficient balance for this withdrawal.',
             ];
         }
 
@@ -143,12 +151,16 @@ class ReferralService
             ];
         }
 
-        $withdrawal = DB::transaction(function () use ($user, $amount, $phoneNumber, $network) {
+        $withdrawal = DB::transaction(function () use ($user, $amount, $accountName, $accountNumber, $bankName) {
             return ReferralWithdrawal::create([
                 'user_id' => $user->id,
                 'amount' => $amount,
-                'phone_number' => $phoneNumber,
-                'network' => $network,
+                'account_name' => $accountName,
+                'account_number' => $accountNumber,
+                'bank_name' => $bankName,
+                // Legacy airtime columns kept for older rows compatibility.
+                'phone_number' => '',
+                'network' => '',
                 'status' => 'pending',
             ]);
         });

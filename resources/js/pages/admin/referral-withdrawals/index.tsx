@@ -27,8 +27,11 @@ interface Withdrawal {
   id: number;
   uuid: string;
   amount: string;
-  phone_number: string;
-  network: string;
+  account_name: string | null;
+  account_number: string | null;
+  bank_name: string | null;
+  phone_number: string | null;
+  network: string | null;
   status: 'pending' | 'paid' | 'rejected';
   admin_notes: string | null;
   processed_at: string | null;
@@ -179,8 +182,18 @@ export default function ReferralWithdrawalsIndex({ withdrawals, pendingCount, fi
                         ₦{Number(withdrawal.amount).toLocaleString()}
                       </td>
                       <td className="py-4 pr-4">
-                        <div>{withdrawal.phone_number}</div>
-                        <div className="uppercase text-muted-foreground">{withdrawal.network}</div>
+                        {withdrawal.account_number ? (
+                          <>
+                            <div className="font-medium">{withdrawal.account_name}</div>
+                            <div>{withdrawal.bank_name}</div>
+                            <div className="text-muted-foreground">{withdrawal.account_number}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div>{withdrawal.phone_number}</div>
+                            <div className="uppercase text-muted-foreground">{withdrawal.network}</div>
+                          </>
+                        )}
                       </td>
                       <td className="py-4 pr-4">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusBadge(withdrawal.status)}`}>
@@ -262,7 +275,10 @@ export default function ReferralWithdrawalsIndex({ withdrawals, pendingCount, fi
               {selectedWithdrawal && (
                 <>
                   Confirm {nextStatus === 'paid' ? 'payment of' : 'rejection for'} ₦
-                  {Number(selectedWithdrawal.amount).toLocaleString()} to {selectedWithdrawal.phone_number}.
+                  {Number(selectedWithdrawal.amount).toLocaleString()}
+                  {selectedWithdrawal.account_number
+                    ? ` to ${selectedWithdrawal.account_name} (${selectedWithdrawal.bank_name} · ${selectedWithdrawal.account_number})`
+                    : ` to ${selectedWithdrawal.phone_number}`}.
                 </>
               )}
             </DialogDescription>

@@ -130,16 +130,20 @@ class ReferralController extends Controller
         $minAmount = $this->referralService->minWithdrawalAmount();
 
         $request->validate([
-            'phone_number' => 'required|string|min:10|max:20',
-            'network' => 'required|string|in:mtn,airtel,glo,9mobile',
+            'account_name' => 'required|string|min:2|max:120',
+            'account_number' => 'required|string|regex:/^\d{10}$/',
+            'bank_name' => 'required|string|min:2|max:120',
             'amount' => 'required|numeric|min:' . $minAmount,
+        ], [
+            'account_number.regex' => 'Account number must be exactly 10 digits.',
         ]);
 
         $result = $this->referralService->requestWithdrawal(
             auth()->user(),
             (float) $request->input('amount'),
-            $request->input('phone_number'),
-            $request->input('network')
+            trim($request->input('account_name')),
+            $request->input('account_number'),
+            trim($request->input('bank_name'))
         );
 
         if (!$result['success']) {
@@ -163,6 +167,9 @@ class ReferralController extends Controller
         return [
             'uuid' => $withdrawal->uuid,
             'amount' => (float) $withdrawal->amount,
+            'account_name' => $withdrawal->account_name,
+            'account_number' => $withdrawal->account_number,
+            'bank_name' => $withdrawal->bank_name,
             'phone_number' => $withdrawal->phone_number,
             'network' => $withdrawal->network,
             'status' => $withdrawal->status,

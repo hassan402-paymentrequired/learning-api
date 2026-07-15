@@ -31,7 +31,9 @@ class ReferralWithdrawalRequestedNotification extends Notification implements Sh
             ->greeting('New withdrawal request')
             ->line("{$user->name} ({$user->email}) requested a referral payout.")
             ->line('Amount: ₦' . number_format((float) $this->withdrawal->amount, 0))
-            ->line('Phone: ' . $this->withdrawal->phone_number . ' (' . strtoupper($this->withdrawal->network) . ')')
+            ->line('Bank: ' . ($this->withdrawal->bank_name ?: 'N/A'))
+            ->line('Account name: ' . ($this->withdrawal->account_name ?: 'N/A'))
+            ->line('Account number: ' . ($this->withdrawal->account_number ?: 'N/A'))
             ->action('Review in admin', $adminUrl);
     }
 

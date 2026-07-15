@@ -30,7 +30,8 @@ class ReferralWithdrawalStatusNotification extends Notification implements Shoul
                 ->subject('Your referral withdrawal was paid — ' . config('app.name'))
                 ->greeting('Payment sent')
                 ->line("Your withdrawal of ₦{$amount} has been marked as paid.")
-                ->line('Phone: ' . $this->withdrawal->phone_number . ' (' . strtoupper($this->withdrawal->network) . ')')
+                ->line('Paid to: ' . ($this->withdrawal->account_name ?: 'your bank account'))
+                ->line(($this->withdrawal->bank_name ?: 'Bank') . ' · ' . ($this->withdrawal->account_number ?: 'N/A'))
                 ->action('View referral page', rtrim(config('app.frontend_url', config('app.url')), '/') . '/referral');
         }
 

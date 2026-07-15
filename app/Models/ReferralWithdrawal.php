@@ -13,6 +13,9 @@ class ReferralWithdrawal extends Model
     protected $fillable = [
         'user_id',
         'amount',
+        'account_name',
+        'account_number',
+        'bank_name',
         'phone_number',
         'network',
         'status',
