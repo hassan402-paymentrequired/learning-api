@@ -20,7 +20,7 @@ class ReferralService
 
     public function rewardAmount(): float
     {
-        return (float) config('referral.reward_amount', 500);
+        return (float) config('referral.reward_amount', 1000);
     }
 
     public function minWithdrawalAmount(): float
@@ -60,7 +60,7 @@ class ReferralService
     }
 
     /**
-     * Award ₦500 to referrer when a referred user activates a subscription.
+     * Award ₦1,000 to referrer when a referred user activates a subscription.
      */
     public function rewardOnSubscription(User $referredUser, Subscription $subscription): void
     {

@@ -419,9 +419,13 @@ HTML;
             });
 
             $subscriptionEmail->sendReceipt($subscription->fresh());
-        } elseif (empty($subscription->device_id) && !empty($deviceId)) {
-            // Legacy subscriptions activated before device binding was enforced
-            $subscription->update(['device_id' => $deviceId]);
+        } elseif (!empty($deviceId)) {
+            // Bind or rebind to the browser completing verification.
+            // Covers: legacy unbound rows, and web clients that lost localStorage
+            // between Paystack redirect and finalize (callback already activated).
+            if (empty($subscription->device_id) || $subscription->device_id !== $deviceId) {
+                $subscription->update(['device_id' => $deviceId]);
+            }
         }
 
         return response()->json([
@@ -469,6 +473,27 @@ HTML;
                 return response()->json([
                     'success' => true,
                     'message' => 'This device is already linked to an active subscription.',
+                ]);
+            }
+
+            // Recent purchase reclaim: web clients often lose localStorage during/after
+            // Paystack and generate a new device id. Allow rebinding within 48 hours of activation.
+            $recentOtherDevice = $user->subscriptions()
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
+                ->whereNotNull('device_id')
+                ->where('device_id', '!=', $deviceId)
+                ->where('starts_at', '>=', now()->subHours(48))
+                ->orderByDesc('starts_at')
+                ->first();
+
+            if ($recentOtherDevice) {
+                $recentOtherDevice->update(['device_id' => $deviceId]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Subscription linked to this browser.',
+                    'code' => 'DEVICE_RECLAIMED',
                 ]);
             }
 
