@@ -61,6 +61,7 @@ class ExamAttemptController extends Controller
         $attemptData = [
             'user_id' => auth()->id(),
             'exam_id' => $exam->id,
+            'exam_type' => $exam->exam_type,
             'started_at' => now(),
             'status' => 'in_progress',
             'total_questions' => $totalQuestions,
@@ -203,6 +204,7 @@ class ExamAttemptController extends Controller
             'user_id' => $user->id,
             'device_id' => $deviceId,
             'exam_id' => $examId,
+            'exam_type' => $categorySlug,
             'status' => 'in_progress',
             'started_at' => now(),
             'duration_minutes' => $durationMinutes,
@@ -503,22 +505,22 @@ class ExamAttemptController extends Controller
         $exam = $attempt->exam;
         $totalQuestions = $attempt->total_questions;
         
-        // Determine if this is a JAMB exam
-        $isJamb = false;
-        if ($exam && $exam->exam_type === 'JAMB') {
-            $isJamb = true;
-        } else {
-            // For practice sessions, check the exam_type from request or metadata
-            $providedExamType = $request->input('exam_type');
-            if ($providedExamType) {
-                $category = \App\Models\ExamCategory::where('id', $providedExamType)
-                    ->orWhere('slug', $providedExamType)
-                    ->first();
-                if ($category && $category->slug === 'JAMB') {
-                    $isJamb = true;
-                }
+        // Determine if this is a JAMB exam (practice stores category slug on the attempt)
+        $examTypeToken = strtolower((string) ($attempt->exam_type ?: $exam?->exam_type ?: ''));
+        $providedExamType = $request->input('exam_type');
+        if ($providedExamType) {
+            $category = \App\Models\ExamCategory::where('id', $providedExamType)
+                ->orWhere('slug', $providedExamType)
+                ->orWhereRaw('LOWER(slug) = ?', [strtolower((string) $providedExamType)])
+                ->first();
+            if ($category) {
+                $examTypeToken = strtolower($category->slug);
+            } else {
+                $examTypeToken = strtolower((string) $providedExamType);
             }
         }
+
+        $isJamb = $examTypeToken === 'jamb';
 
         if ($isJamb && $totalQuestions > 0) {
             $score = round(($correctAnswers / $totalQuestions) * 400);

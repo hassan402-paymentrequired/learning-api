@@ -16,6 +16,7 @@ class ExamAttempt extends Model
         'user_id',
         'device_id',
         'exam_id',
+        'exam_type',
         'started_at',
         'completed_at',
         'time_spent',
@@ -69,8 +70,10 @@ class ExamAttempt extends Model
      */
     public function getPercentageAttribute(): float
     {
+        $examType = strtolower((string) ($this->exam_type ?: $this->exam?->exam_type));
+
         // For JAMB, percentage is based on 400 marks
-        if ($this->exam && $this->exam->exam_type === 'JAMB') {
+        if ($examType === 'jamb') {
             return round(($this->score / 400) * 100, 2);
         }
 
