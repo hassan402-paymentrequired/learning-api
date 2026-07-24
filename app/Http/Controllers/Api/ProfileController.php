@@ -33,6 +33,7 @@ class ProfileController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'sometimes|nullable|string|max:255',
             'current_password' => 'required_with:password|string',
             'password' => 'sometimes|nullable|string|min:8|confirmed',
         ]);
@@ -56,6 +57,11 @@ class ProfileController extends Controller
             $user->email_verified_at = null;
         }
 
+        // Update phone if provided (nullable — empty string clears it)
+        if ($request->has('phone')) {
+            $user->phone = $request->phone !== '' ? $request->phone : null;
+        }
+
         // Update password if provided
         if ($request->has('password') && $request->password) {
             // Verify current password
@@ -63,6 +69,9 @@ class ProfileController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Current password is incorrect.',
+                    'errors' => [
+                        'current_password' => ['Current password is incorrect.'],
+                    ],
                 ], 400);
             }
 

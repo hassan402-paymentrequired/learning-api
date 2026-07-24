@@ -39,6 +39,7 @@ final class PublicId
             'uuid' => $user->uuid,
             'name' => $user->name,
             'email' => $user->email,
+            'phone' => $user->phone,
             'email_verified_at' => $user->email_verified_at,
             'subscription_status' => $user->subscription_status ?? null,
             'subscription_expires_at' => $user->subscription_expires_at ?? null,
