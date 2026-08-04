@@ -104,52 +104,34 @@ class SubscriptionController extends Controller
             ], 400);
         }
 
-        // Calculate amount with referral discount
+        // Always charge the full plan price — no referral discounts
         $originalAmount = (float) $plan->price;
         $discountAmount = 0;
         $finalAmount = $originalAmount;
         $referral = null;
 
-        // Apply discount if user was referred
-        if ($request->has('referral_code') && $request->referral_code) {
+        // Link referrer for reward tracking only (does not change price)
+        if ($request->filled('referral_code')) {
             $referrer = User::where('referral_code', $request->referral_code)->first();
-            if ($referrer && $referrer->id !== $user->id) {
-                if (!$user->referred_by) {
-                    $discountAmount = $originalAmount * (config('referral.referred_discount_percent', 5) / 100);
-                    $finalAmount = $originalAmount - $discountAmount;
-                    // Store referral relationship (will be finalized after payment)
-                    $user->referred_by = $referrer->id;
-                    $user->save();
+            if ($referrer && $referrer->id !== $user->id && !$user->referred_by) {
+                $user->referred_by = $referrer->id;
+                $user->save();
 
-                    // Create or get existing referral record
-                    $referral = \App\Models\Referral::firstOrCreate(
-                        [
-                            'referred_id' => $user->id,
-                        ],
-                        [
-                            'referrer_id' => $referrer->id,
-                            'referred_discount_amount' => $discountAmount,
-                            'status' => 'pending',
-                        ]
-                    );
-                } else {
-                    // User already has a referrer, use existing referral
-                    $referral = \App\Models\Referral::where('referred_id', $user->id)->first();
-                    if ($referral) {
-                        $discountAmount = $originalAmount * 0.05; // 5% discount
-                        $finalAmount = $originalAmount - $discountAmount;
-                    }
-                }
+                $referral = \App\Models\Referral::firstOrCreate(
+                    [
+                        'referred_id' => $user->id,
+                    ],
+                    [
+                        'referrer_id' => $referrer->id,
+                        'referred_discount_amount' => 0,
+                        'status' => 'pending',
+                    ]
+                );
             }
-        } else {
-            // Check if user was already referred (from signup)
-            if ($user->referred_by) {
-                $referral = \App\Models\Referral::where('referred_id', $user->id)->first();
-                if ($referral && $referral->status === 'pending') {
-                    $discountAmount = $originalAmount * 0.05; // 5% discount
-                    $finalAmount = $originalAmount - $discountAmount;
-                }
-            }
+        }
+
+        if (!$referral && $user->referred_by) {
+            $referral = \App\Models\Referral::where('referred_id', $user->id)->first();
         }
 
         // Initialize Paystack payment
