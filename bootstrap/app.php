@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureMobileAppVersion;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Console\Scheduling\Schedule;
@@ -22,6 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        $middleware->api(append: [
+            EnsureMobileAppVersion::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

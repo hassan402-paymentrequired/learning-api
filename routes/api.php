@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\NotificationSettingsController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\DevicePushTokenController;
 use App\Http\Controllers\Api\WaitlistController;
+use App\Http\Controllers\Api\AppVersionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -32,6 +33,8 @@ use App\Http\Controllers\Api\WaitlistController;
 */
 
 // Public routes
+Route::get('/app-version', [AppVersionController::class, 'show']);
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
