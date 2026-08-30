@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ExamAttemptController;
 use App\Http\Controllers\Api\StreakController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\CampaignController;
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SubscriptionPinController;
 use App\Http\Controllers\Api\ReferralController;
@@ -100,6 +101,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
     Route::get('/exam-attempts/{attempt}', [ExamAttemptController::class, 'show']);
     Route::get('/exam-attempts/{attempt}/results', [ExamAttemptController::class, 'results']);
     Route::get('/analytics', [ExamAttemptController::class, 'analytics']);
+    Route::get('/analytics/practice-history', [AnalyticsController::class, 'practiceHistory']);
 
     // Streak routes
     Route::get('/streaks', [StreakController::class, 'index']);
