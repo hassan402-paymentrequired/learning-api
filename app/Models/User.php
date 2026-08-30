@@ -28,7 +28,6 @@ class User extends Authenticatable implements JWTSubject
         'referral_code',
         'referred_by',
         'paystack_customer_code',
-        'is_admin',
         'push_notifications_enabled',
         'morning_reminder_time',
         'timezone',

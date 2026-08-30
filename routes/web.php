@@ -115,6 +115,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{examCategory}', [App\Http\Controllers\Admin\ExamCategoryController::class, 'destroy'])->name('destroy');
         });
 
+        // Campaigns routes (marquee, countdown, popup)
+        Route::prefix('campaigns')->name('campaigns.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\CampaignController::class, 'index'])->name('index');
+            Route::get('/create', [App\Http\Controllers\Admin\CampaignController::class, 'create'])->name('create');
+            Route::post('/', [App\Http\Controllers\Admin\CampaignController::class, 'store'])->name('store');
+            Route::get('/{campaign}/edit', [App\Http\Controllers\Admin\CampaignController::class, 'edit'])->name('edit');
+            Route::patch('/{campaign}', [App\Http\Controllers\Admin\CampaignController::class, 'update'])->name('update');
+            Route::post('/{campaign}/toggle-active', [App\Http\Controllers\Admin\CampaignController::class, 'toggleActive'])->name('toggle-active');
+            Route::delete('/{campaign}', [App\Http\Controllers\Admin\CampaignController::class, 'destroy'])->name('destroy');
+        });
+
         // Subjects routes
         Route::prefix('subjects')->name('subjects.')->group(function () {
             Route::get('/', [App\Http\Controllers\Admin\SubjectController::class, 'index'])->name('index');

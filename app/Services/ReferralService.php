@@ -123,7 +123,6 @@ class ReferralService
         string $bankName
     ): array {
         $minAmount = $this->minWithdrawalAmount();
-        $available = $this->availableBalance($user);
 
         if ($amount < $minAmount) {
             return [
@@ -132,38 +131,47 @@ class ReferralService
             ];
         }
 
-        if ($amount > $available) {
+        try {
+            $withdrawal = DB::transaction(function () use ($user, $amount, $accountName, $accountNumber, $bankName) {
+                // Lock the user row so concurrent withdrawal requests serialize:
+                // the balance/pending checks and the insert happen atomically.
+                User::query()->whereKey($user->id)->lockForUpdate()->first();
+
+                if ($amount > $this->availableBalance($user)) {
+                    throw new \RuntimeException('insufficient_balance');
+                }
+
+                $hasPending = ReferralWithdrawal::query()
+                    ->where('user_id', $user->id)
+                    ->where('status', 'pending')
+                    ->exists();
+
+                if ($hasPending) {
+                    throw new \RuntimeException('has_pending');
+                }
+
+                return ReferralWithdrawal::create([
+                    'user_id' => $user->id,
+                    'amount' => $amount,
+                    'account_name' => $accountName,
+                    'account_number' => $accountNumber,
+                    'bank_name' => $bankName,
+                    // Legacy airtime columns kept for older rows compatibility.
+                    'phone_number' => '',
+                    'network' => '',
+                    'status' => 'pending',
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            $message = $e->getMessage() === 'has_pending'
+                ? 'You already have a pending withdrawal request. Please wait for it to be processed.'
+                : 'Insufficient balance for this withdrawal.';
+
             return [
                 'success' => false,
-                'message' => 'Insufficient balance for this withdrawal.',
+                'message' => $message,
             ];
         }
-
-        $hasPending = ReferralWithdrawal::query()
-            ->where('user_id', $user->id)
-            ->where('status', 'pending')
-            ->exists();
-
-        if ($hasPending) {
-            return [
-                'success' => false,
-                'message' => 'You already have a pending withdrawal request. Please wait for it to be processed.',
-            ];
-        }
-
-        $withdrawal = DB::transaction(function () use ($user, $amount, $accountName, $accountNumber, $bankName) {
-            return ReferralWithdrawal::create([
-                'user_id' => $user->id,
-                'amount' => $amount,
-                'account_name' => $accountName,
-                'account_number' => $accountNumber,
-                'bank_name' => $bankName,
-                // Legacy airtime columns kept for older rows compatibility.
-                'phone_number' => '',
-                'network' => '',
-                'status' => 'pending',
-            ]);
-        });
 
         $this->notifyAdminsOfWithdrawal($withdrawal->load('user'));
 

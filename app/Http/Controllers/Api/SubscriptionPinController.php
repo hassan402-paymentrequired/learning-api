@@ -9,6 +9,7 @@ use App\Services\ReferralService;
 use App\Services\SubscriptionEmailService;
 use App\Support\PublicId;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class SubscriptionPinController extends Controller
@@ -32,57 +33,67 @@ class SubscriptionPinController extends Controller
             ], 400);
         }
 
-        // Find the PIN — it must belong to this user and be unused
-        $subscriptionPin = SubscriptionPin::where('pin', $request->pin)
-            ->where('user_id', $user->id)
-            ->where('status', 'unused')
-            ->first();
+        try {
+            $subscription = DB::transaction(function () use ($request, $user, $deviceId) {
+                // Lock the PIN row for the duration of the transaction so two
+                // concurrent requests can't both pass the "unused" check.
+                $subscriptionPin = SubscriptionPin::where('pin', $request->pin)
+                    ->where('user_id', $user->id)
+                    ->where('status', 'unused')
+                    ->lockForUpdate()
+                    ->first();
 
-        if (!$subscriptionPin) {
+                if (!$subscriptionPin) {
+                    throw new \RuntimeException('invalid_pin');
+                }
+
+                if ($subscriptionPin->expires_at && $subscriptionPin->expires_at->isPast()) {
+                    throw new \RuntimeException('expired_pin');
+                }
+
+                // Calculate expiry date
+                $days          = (int) SubscriptionSetting::get('default_subscription_days', 365);
+                $globalExpiry  = SubscriptionSetting::get('global_expiry_date');
+
+                if ($globalExpiry) {
+                    $expiresAt = Carbon::parse($globalExpiry)->endOfDay();
+                } else {
+                    $expiresAt = now()->addDays($days);
+                }
+
+                // Activate the user's subscription by creating a new subscription record
+                $subscription = \App\Models\Subscription::create([
+                    'user_id'              => $user->id,
+                    'subscription_plan_id' => 1, // Default or find appropriate plan ID
+                    'status'               => 'active',
+                    'type'                 => 'pin',
+                    'starts_at'            => now(),
+                    'expires_at'           => $expiresAt,
+                    'device_id'            => $deviceId,
+                    'amount_paid'          => 0, // PIN-based is usually prepaid/free at this point
+                    'original_amount'      => 0,
+                    'discount_amount'      => 0,
+                    'notes'                => "Activated via PIN: {$subscriptionPin->pin}",
+                ]);
+
+                // Mark PIN as consumed
+                $subscriptionPin->update([
+                    'status'  => 'used',
+                    'used_at' => now(),
+                ]);
+
+                return $subscription;
+            });
+        } catch (\RuntimeException $e) {
+            $message = $e->getMessage() === 'expired_pin'
+                ? 'This PIN has expired. Please request a new one from admin.'
+                : 'Invalid or already used PIN. Please check the PIN and try again.';
+
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid or already used PIN. Please check the PIN and try again.',
+                'message' => $message,
             ], 422);
         }
-
-        // Check PIN has not expired
-        if ($subscriptionPin->expires_at && $subscriptionPin->expires_at->isPast()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This PIN has expired. Please request a new one from admin.',
-            ], 422);
-        }
-
-        // Calculate expiry date
-        $days          = (int) SubscriptionSetting::get('default_subscription_days', 365);
-        $globalExpiry  = SubscriptionSetting::get('global_expiry_date');
-
-        if ($globalExpiry) {
-            $expiresAt = Carbon::parse($globalExpiry)->endOfDay();
-        } else {
-            $expiresAt = now()->addDays($days);
-        }
-
-        // Activate the user's subscription by creating a new subscription record
-        $subscription = \App\Models\Subscription::create([
-            'user_id'              => $user->id,
-            'subscription_plan_id' => 1, // Default or find appropriate plan ID
-            'status'               => 'active',
-            'type'                 => 'pin',
-            'starts_at'            => now(),
-            'expires_at'           => $expiresAt,
-            'device_id'            => $deviceId,
-            'amount_paid'          => 0, // PIN-based is usually prepaid/free at this point
-            'original_amount'      => 0,
-            'discount_amount'      => 0,
-            'notes'                => "Activated via PIN: {$subscriptionPin->pin}",
-        ]);
-
-        // Mark PIN as consumed
-        $subscriptionPin->update([
-            'status'  => 'used',
-            'used_at' => now(),
-        ]);
 
         $referralService->rewardOnSubscription($user, $subscription->fresh());
         $referralService->ensureReferralCode($user);

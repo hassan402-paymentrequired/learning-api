@@ -359,7 +359,9 @@ HTML;
             'reference' => 'required|string',
         ]);
 
-        $subscription = Subscription::where('paystack_reference', $request->reference)->firstOrFail();
+        $subscription = Subscription::where('paystack_reference', $request->reference)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
 
         // Verify with Paystack
         $paystackSecretKey = config('services.paystack.secret_key');

@@ -13,7 +13,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, FileText, Users, Activity, Settings, Database, GraduationCap, Building2, Wallet } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, FileText, Users, Activity, Settings, Database, GraduationCap, Building2, Wallet, Megaphone } from 'lucide-react';
 import AppLogo from './app-logo';
 import admin from '@/routes/admin';
 
@@ -62,6 +62,11 @@ const mainNavItems: NavItem[] = [
         title: 'Subjects',
         href: admin.subjects.index().url,
         icon: GraduationCap,
+    },
+    {
+        title: 'Campaigns',
+        href: admin.campaigns.index().url,
+        icon: Megaphone,
     },
     {
         title: 'Settings',

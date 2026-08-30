@@ -196,7 +196,10 @@ class UserController extends Controller
             'is_admin' => 'boolean',
         ]);
 
-        $user->update($validated);
+        // is_admin is deliberately excluded from User::$fillable to prevent
+        // privilege escalation via client-facing mass assignment, so it must
+        // be force-filled here in this admin-gated (EnsureUserIsAdmin) controller.
+        $user->forceFill($validated)->save();
 
         return redirect()->route('admin.users.show', $user)
             ->with('success', 'User updated successfully.');
@@ -207,9 +210,9 @@ class UserController extends Controller
      */
     public function toggleAdmin(Request $request, User $user)
     {
-        $user->update([
+        $user->forceFill([
             'is_admin' => !$user->is_admin,
-        ]);
+        ])->save();
 
         return redirect()->route('admin.users.index')
             ->with('success', $user->is_admin ? 'User granted admin access.' : 'User admin access revoked.');

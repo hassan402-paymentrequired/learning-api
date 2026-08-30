@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ExamController;
 use App\Http\Controllers\Api\ExamAttemptController;
 use App\Http\Controllers\Api\StreakController;
 use App\Http\Controllers\Api\AnnouncementController;
+use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SubscriptionPinController;
 use App\Http\Controllers\Api\ReferralController;
@@ -106,6 +107,9 @@ Route::middleware(['auth:api', \App\Http\Middleware\EnsureEmailIsVerified::class
 
     // Announcement routes
     Route::get('/announcements', [AnnouncementController::class, 'index']);
+
+    // Campaign routes (marquee, countdown, popup)
+    Route::get('/campaigns', [CampaignController::class, 'index']);
 
     // Subscription routes
     Route::get('/subscriptions/plans', [SubscriptionController::class, 'plans']);

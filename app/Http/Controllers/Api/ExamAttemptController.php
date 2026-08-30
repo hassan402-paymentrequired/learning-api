@@ -258,7 +258,8 @@ class ExamAttemptController extends Controller
         ]);
 
         $question = Question::where('uuid', $request->question_uuid)->firstOrFail();
-        
+
+        $result = DB::transaction(function () use ($request, $attempt, $question) {
         // Handle different question types
         if (in_array($question->question_type, ['text_input', 'numeric_input'])) {
             // For text/numeric input, we need answer_text
@@ -344,6 +345,13 @@ class ExamAttemptController extends Controller
                 'is_correct' => $answer->is_correct,
                 'time_spent' => $request->time_spent ?? 0,
             ]);
+        }
+
+        return null;
+        });
+
+        if ($result !== null) {
+            return $result;
         }
 
         return response()->json([
@@ -576,20 +584,22 @@ class ExamAttemptController extends Controller
             $updateData['duration_minutes'] = $durationMinutes;
         }
 
-        $attempt->update($updateData);
+        DB::transaction(function () use ($attempt, $updateData) {
+            $attempt->update($updateData);
 
-        // Record streak for today if not already recorded
-        $today = Carbon::today();
-        $existingStreak = UserStreak::where('user_id', auth()->id())
-            ->where('date', $today)
-            ->first();
+            // Record streak for today if not already recorded
+            $today = Carbon::today();
+            $existingStreak = UserStreak::where('user_id', auth()->id())
+                ->where('date', $today)
+                ->first();
 
-        if (!$existingStreak) {
-            UserStreak::create([
-                'user_id' => auth()->id(),
-                'date' => $today,
-            ]);
-        }
+            if (!$existingStreak) {
+                UserStreak::create([
+                    'user_id' => auth()->id(),
+                    'date' => $today,
+                ]);
+            }
+        });
 
         return response()->json([
             'success' => true,
