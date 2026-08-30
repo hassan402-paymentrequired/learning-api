@@ -9,13 +9,24 @@ class MobileAppVersionService
     public function publicConfig(): array
     {
         return [
+            'ios_available' => (bool) config('mobile_app.ios_available'),
+            'android_available' => (bool) config('mobile_app.android_available'),
             'ios_min_version' => config('mobile_app.ios_min_version'),
             'android_min_version' => config('mobile_app.android_min_version'),
-            'ios_store_url' => config('mobile_app.ios_store_url'),
-            'android_store_url' => config('mobile_app.android_store_url'),
+            'ios_store_url' => $this->storeUrlForPlatform('ios'),
+            'android_store_url' => $this->storeUrlForPlatform('android'),
             'force_update' => (bool) config('mobile_app.force_update'),
             'message' => config('mobile_app.message'),
         ];
+    }
+
+    public function isPlatformAvailable(string $platform): bool
+    {
+        return match ($platform) {
+            'ios' => (bool) config('mobile_app.ios_available'),
+            'android' => (bool) config('mobile_app.android_available'),
+            default => false,
+        };
     }
 
     public function isUpdateRequired(string $platform, string $version): bool
@@ -44,6 +55,10 @@ class MobileAppVersionService
 
     public function storeUrlForPlatform(string $platform): ?string
     {
+        if (! $this->isPlatformAvailable($platform)) {
+            return null;
+        }
+
         return match ($platform) {
             'ios' => config('mobile_app.ios_store_url'),
             'android' => config('mobile_app.android_store_url'),
